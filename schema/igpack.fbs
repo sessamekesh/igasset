@@ -1,0 +1,14 @@
+include "igasset.fbs";
+
+namespace IgAsset;
+
+table SingleAsset {
+  name: string;
+  data: SingleAssetData;
+}
+
+table AssetPack {
+  assets: [SingleAsset];
+}
+
+root_type AssetPack;

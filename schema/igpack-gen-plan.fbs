@@ -1,0 +1,27 @@
+include "igasset.fbs";
+
+namespace IgPackGen;
+
+enum IgassetSourceType : byte {
+  Unknown,
+  WgslSource,
+  DracoGeometry,
+  Texture2D
+}
+
+table IgassetSource {
+  file_path: string;
+  source_type: IgassetSourceType;
+  igasset_name: string;
+}
+
+table SingleIgpackGenAction {
+  output_path: string;
+  igasset_sources: [IgassetSource];
+}
+
+table IgpackGenPlan {
+  igpack_gen_actions: [SingleIgpackGenAction];
+}
+
+root_type IgpackGenPlan;

@@ -1,0 +1,23 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+
+# Keep this explicit so tooling doesn't guess older standards.
+Standard: c++20
+
+# Formatting options used across Indigo Code projects
+ColumnLimit: 80
+PointerAlignment: Left
+ReferenceAlignment: Left
+BreakBeforeBraces: Attach
+NamespaceIndentation: None
+FixNamespaceComments: true
+IncludeBlocks: Preserve
+SortIncludes: true
+AlignConsecutiveDeclarations: None
+AlignAfterOpenBracket: Align
+BinPackParameters: true
+BinPackArguments: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+...

@@ -1,0 +1,76 @@
+include "types.fbs";
+include "igasset.fbs";
+
+namespace IgAssetGen;
+
+//
+// COMMON TYPES
+//
+table DracoCompressionParams {
+  compression_level: uint8 = 10;
+  decompression_level: uint8 = 10;
+
+  general_quantization: uint8 = 11;
+  pos_quantization: uint8 = 11;
+  normal_quantization: uint8 = 11;
+  texcoord_quantization: uint8 = 11;
+}
+
+//
+// ACTIONS
+//
+
+table CopyWgslSourceAction {
+  input_file_path: string;
+  output_file_path: string;
+
+  vertex_entry_point: string;
+  fragment_entry_point: string;
+  compute_entry_point: string;
+}
+
+table AssimpToDracoAction {
+  input_file_path: string;
+  output_file_path: string;
+  assimp_mesh_names: [string];
+
+  include_tangent_bitangents: bool = false;
+  include_texcoords: bool = false;
+  include_bones: bool = false;
+
+  draco_params: DracoCompressionParams;
+}
+
+table Output2DImage {
+  output_file_path: string;
+  image_encoding: IgAsset.Image2DEncoding = RGBA8Unorm;
+
+  width: uint16;
+  height: uint16;
+
+  // Only used for compressed formats. Range is [0, 100]. -1 means default quality.
+  quality: int16 = -1;
+  use_srgb: bool = false;
+  gen_mips: bool = false;
+}
+
+table ImageToTexture2DAction {
+  input_file_path: string;
+  outputs: [Output2DImage];
+}
+
+//
+// BUNDLE / PLAN TYPES
+//
+
+union SingleIgassetGenActionData {
+  CopyWgslSourceAction,
+  AssimpToDracoAction,
+  ImageToTexture2DAction
+}
+
+table SingleIgassetGenAction {
+  actions: [SingleIgassetGenActionData];
+}
+
+root_type SingleIgassetGenAction;

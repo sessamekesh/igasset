@@ -1,0 +1,11 @@
+namespace IgAsset;
+
+table Mat4 {
+  values: [float];
+}
+
+enum Image2DEncoding : byte {
+  RGBA8Unorm = 1,
+  ETC1S = 2,
+  UASTC_LDR_4_4 = 3,
+}

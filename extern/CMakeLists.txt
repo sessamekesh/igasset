@@ -74,7 +74,7 @@ endif ()
 
 #
 # Tooling-only dependencies
-if (NOT EMSCRIPTEN AND (IGASSET_BUILD_IGASSET_GEN OR IGASSET_BUILD_IGPACK_GEN))
+if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
   #
   # CLI11 - Used for parsing command-line arguments in generator tools
   if (NOT TARGET cli11)

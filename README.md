@@ -32,8 +32,7 @@ To use the generation tools or the decoder library within a project, run a **nat
 
 | Flag Name                       | Type + Default         | Description                                                         |
 | ------------------------------- | ---------------------- | ------------------------------------------------------------------- |
-| `IGASSET_BUILD_IGASSET_GEN`     | **ON** (default) / OFF | Disable to skip building the `igasset-gen` binary target            |
-| `IGASSET_BUILD_IGPACK_GEN`      | **ON** (default) / OFF | Disable to skip building the `igpack-gen` binary target             |
+| `IGASSET_BUILD_GEN_TOOLS`       | **ON** (default) / OFF | Disable to skip building generator binaries and tooling dependencies |
 | `IGASSET_BUILD_IGASSET_DECODER` | **ON** (default) / OFF | Disable to skip building the `igasset` library target               |
 | `IGASSET_ENABLE_BASISU_SUPPORT` | **ON** (default) / OFF | Disable to remove basisu support. Reduces binary size significantly |
 

@@ -9,13 +9,20 @@ project(
 
 #
 # Build configuration settings
-set(IGASSET_BUILD_IGASSET_GEN "ON" CACHE BOOL "Build the igasset-gen tool")
-set(IGASSET_BUILD_IGPACK_GEN "ON" CACHE BOOL "Build the igpack-gen tool")
+set(IGASSET_BUILD_GEN_TOOLS "ON" CACHE BOOL "Build the generator tools")
 set(IGASSET_BUILD_IGASSET_DECODER "ON" CACHE BOOL "Build the igasset decoder")
 set(IGASSET_ENABLE_BASISU_SUPPORT "ON" CACHE BOOL "Build support for the Basis Universal image format")
+
+#
+# Global configuration (not intended to be modified)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(extern)
 
 include(cmake/gen_flatbuffer_cpp.cmake)
 
 add_subdirectory(igasset)
+
+if (IGASSET_BUILD_GEN_TOOLS)
+  add_subdirectory(tools)
+endif ()

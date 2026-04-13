@@ -1,4 +1,9 @@
 gen_flatbuffer_cpp(
+  TARGET_NAME igasset_types_schema
+  SCHEMA_FILE "../schema/types.fbs"
+  BIN_PATH_NAME "igasset/schema")
+
+gen_flatbuffer_cpp(
   TARGET_NAME igasset_schema
   SCHEMA_FILE "../schema/igasset.fbs"
   BIN_PATH_NAME "igasset/schema")
@@ -32,6 +37,9 @@ if (IGASSET_BUILD_IGASSET_DECODER)
   set_property(TARGET igasset PROPERTY CXX_STANDARD 23)
   target_include_directories(igasset PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${draco_SOURCE_DIR}/src")
   target_include_directories(igasset PUBLIC "${CMAKE_BINARY_DIR}")
+  target_link_libraries(igasset
+    PUBLIC igasset_types_schema igasset_schema igpack_schema
+           spdlog::spdlog glm::glm draco_lib)
   if (IGASSET_ENABLE_BASISU_SUPPORT)
     target_include_directories(igasset PUBLIC "${basisu_SOURCE_DIR}")
     target_link_libraries(igasset PUBLIC basisu_encoder)
@@ -39,6 +47,4 @@ if (IGASSET_BUILD_IGASSET_DECODER)
   else ()
     target_compile_definitions(igasset PRIVATE IGASSET_ENABLE_BASISU_SUPPORT=0)
   endif ()
-  target_link_libraries(igasset
-    PUBLIC igasset_schema igpack_schema spdlog::spdlog glm::glm draco_lib)
 endif ()

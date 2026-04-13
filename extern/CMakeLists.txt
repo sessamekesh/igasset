@@ -53,6 +53,10 @@ endif ()
 #
 # Basisu (compressed format for GPU textures)
 if (NOT TARGET basisu AND IGASSET_ENABLE_BASISU_SUPPORT)
+  # Basisu's MSVC path enables SSE but doesn't pass -msse4.1, which clang-cl requires explicitly.
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(BASISU_SSE OFF CACHE BOOL "" FORCE)
+  endif ()
   FetchContent_Declare(
       basisu
       GIT_REPOSITORY "https://github.com/BinomialLLC/basis_universal"
@@ -93,6 +97,7 @@ if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
+    set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
         assimp

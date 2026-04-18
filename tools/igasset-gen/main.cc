@@ -4,7 +4,9 @@
 #endif
 
 #include <flatbuffers/idl.h>
+#include <igasset-gen/igasset-generator.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
+#include <igasync/promise_combiner.h>
 #include <igasync/task_list.h>
 #include <igasync/thread_pool.h>
 #include <spdlog/logger.h>
@@ -280,8 +282,49 @@ int main(int argc, char** argv) {
             igasset_gen_plan->actions()->size());
   auto filesystem =
       std::make_shared<igassetgen::Filesystem>(log, io_task_list, config);
+  igassetgen::IgassetGenerator generator(log, config, io_task_list,
+                                         exec_task_list, filesystem);
 
-  // TODO (kamaron): Continue here!
+  auto igasset_combiner = igasync::PromiseCombiner::Create();
+  bool igassets_finished = false;
+  bool all_igassets_success = false;
+
+  std::vector<igasync::PromiseCombiner::PromiseKey<bool, false>>
+      igasset_pc_keys;
+  for (const auto* action : *igasset_gen_plan->actions()) {
+    igasset_pc_keys.push_back(igasset_combiner->add(
+        generator.generate_igasset(action), exec_task_list));
+  }
+  auto igassets_finished_promise =
+      igasset_combiner
+          ->combine(
+              [log, &igasset_pc_keys, igassets_finished, &all_igassets_success](
+                  igasync::PromiseCombiner::Result rsl) -> void {
+                log->info("IgAssets finished generating!");
+                all_igassets_success = true;
+                for (const auto& igasset_rsl_key : igasset_pc_keys) {
+                  all_igassets_success =
+                      all_igassets_success && rsl.get(igasset_rsl_key);
+                }
+              },
+              exec_task_list)
+          ->then([&igassets_finished]() { igassets_finished = true; },
+                 exec_task_list);
+
+  //
+  // Spin on exec_task_list from the main thread until all tasks are finished
+  while (!igassets_finished) {
+    if (single_threaded) {
+      while (io_task_list->execute_next());
+    }
+
+    exec_task_list->execute_next();
+  }
+
+  if (!all_igassets_success) {
+    log->error("IgAssetGen errors detected - aborting!");
+    return EXIT_FAILURE;
+  }
 
   return EXIT_SUCCESS;
 }

@@ -69,8 +69,12 @@ union SingleIgassetGenActionData {
   ImageToTexture2DAction
 }
 
+table SingleIgassetGenAction {
+  action: SingleIgassetGenActionData;
+}
+
 table IgAssetGenPlan {
-  actions: [SingleIgassetGenActionData];
+  actions: [SingleIgassetGenAction];
 }
 
 root_type IgAssetGenPlan;

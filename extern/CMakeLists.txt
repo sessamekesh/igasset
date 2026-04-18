@@ -99,10 +99,18 @@ if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
     set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
     set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    # clang-cl drives llvm-rc, which rejects the \xA9 byte in assimp's
+    # VERSIONINFO copyright string. Rewrite revision.h.in to use "(C)".
+    set(_assimp_patch_script
+        "${CMAKE_CURRENT_LIST_DIR}/patches/assimp-fix-llvm-rc.cmake")
     FetchContent_Declare(
         assimp
         GIT_REPOSITORY "https://github.com/assimp/assimp"
         GIT_TAG "v6.0.4"
+        PATCH_COMMAND ${CMAKE_COMMAND}
+            "-DREVISION_H_IN=<SOURCE_DIR>/include/assimp/revision.h.in"
+            -P "${_assimp_patch_script}"
+        UPDATE_DISCONNECTED TRUE
     )
     FetchContent_MakeAvailable(assimp)
   endif ()

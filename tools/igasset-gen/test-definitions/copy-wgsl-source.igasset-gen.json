@@ -1,0 +1,14 @@
+{
+    "actions": [
+        {
+            "action_type": "CopyWgslSourceAction",
+            "action": {
+                "input_file_path": "copy-wgsl-source.wgsl",
+                "output_file_path": "copy-wgsl-rsl.igasset",
+                "vertex_entry_point": "vertex-main",
+                "fragment_entry_point": "fragment-main",
+                "compute_entry_point": "compute-main"
+            }
+        }
+    ]
+}

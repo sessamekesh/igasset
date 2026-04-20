@@ -193,7 +193,14 @@ int main(int argc, char** argv) {
       schema_path = "igasset-gen-plan.fbs";
     }
 
-    std::ifstream fin(schema_path);
+    std::filesystem::path const schema_file_path =
+        std::filesystem::absolute(schema_path);
+    std::filesystem::path const schema_include_root = schema_file_path.parent_path();
+    std::string const schema_include_root_posix =
+        schema_include_root.generic_string();
+    std::string const schema_file_posix = schema_file_path.generic_string();
+
+    std::ifstream fin(schema_file_path);
     if (!fin) {
       log->error("Failed to read igasset-gen-plan.fbs schema file");
       return EXIT_FAILURE;
@@ -205,7 +212,12 @@ int main(int argc, char** argv) {
     schema_text.assign(std::istreambuf_iterator<char>(fin),
                        std::istreambuf_iterator<char>());
 
-    if (!parser.Parse(schema_text.c_str())) {
+    // Resolves include "types.fbs" / include "igasset.fbs" (same directory as
+    // igasset-gen-plan.fbs). Paths must use POSIX separators per FlatBuffers.
+    const char* schema_include_paths[] = {schema_include_root_posix.c_str(),
+                                          nullptr};
+    if (!parser.Parse(schema_text.c_str(), schema_include_paths,
+                      schema_file_posix.c_str())) {
       log->error("Failed to parse igasset-gen-plan.fbs schema file: {}",
                  parser.error_);
       return EXIT_FAILURE;

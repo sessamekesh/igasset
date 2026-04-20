@@ -118,4 +118,13 @@ if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
   #
   # STB (tooling only - used for basic image loading / simple processing)
   add_subdirectory(stb)
+
+  #
+  # PicoSHA2 - header-only SHA256 implementation, used in utilities/testing
+  FetchContent_Declare(
+    picosha2
+    GIT_REPOSITORY "https://github.com/okdshin/PicoSHA2"
+    GIT_TAG "v1.0.1"
+  )
+  FetchContent_MakeAvailable(picosha2)
 endif ()

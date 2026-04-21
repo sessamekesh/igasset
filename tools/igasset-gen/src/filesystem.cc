@@ -29,7 +29,7 @@ std::optional<std::string> Filesystem::read_bin(
     std::string assimp_bin = "";
     auto assimp_bin_size = std::filesystem::file_size(path);
     assimp_bin.resize(assimp_bin_size);
-    std::ifstream fin(path, std::ios::beg | std::ios::binary);
+    std::ifstream fin(path, std::ios::binary);
     if (!fin) {
       log_->error("Could not open {} for reading - aborting", path.string());
       return std::nullopt;

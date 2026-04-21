@@ -15,6 +15,7 @@ jobs:
           cmake -B build -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
           -DIGASYNC_BUILD_TESTS=OFF
           -DIGASYNC_BUILD_EXAMPLES=OFF
 

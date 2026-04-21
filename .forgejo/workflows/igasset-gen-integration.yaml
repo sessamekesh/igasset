@@ -5,7 +5,7 @@ on: [push]
 jobs:
   build-and-test:
     runs-on: docker
-    container: git.indigocode.dev/sessamekesh/emsdk-clang-box:0.4
+    container: git.indigocode.dev/sessamekesh/emsdk-clang-box:0.5
     steps:
       - name: Checkout
         uses: actions/checkout@v4

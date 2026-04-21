@@ -1,0 +1,31 @@
+name: igasset-gen Integration Tests
+
+on: [push]
+
+jobs:
+  build-and-test:
+    runs-on: docker
+    container: git.indigocode.dev/sessamekesh/emsdk-clang-box:0.4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DIGASYNC_BUILD_TESTS=OFF
+          -DIGASYNC_BUILD_EXAMPLES=OFF
+
+      - name: Build
+        run: >
+          cmake --build build
+          --target igasset-gen
+          --target enumerate-igasset
+
+      - name: Run Integration Tests
+        env:
+          IGASSET_GEN_BIN: build/tools/igasset-gen/igasset-gen
+          ENUMERATE_IGASSET_BIN: build/tools/enumerate-igasset/enumerate-igasset
+        run: pytest tools/igasset-gen/e2e/ -v

@@ -14,13 +14,15 @@ function (gen_flatbuffer_cpp)
   set(proto_file_out_dir "${proto_include_dir}/${GFC_BIN_PATH_NAME}")
   set(proto_file_out_name "${proto_file_out_dir}/${generated_file_name}.h")
   get_filename_component(protopath_absolute "${GFC_SCHEMA_FILE}" ABSOLUTE)
-  set(flatc_args "--no-cpp-direct-copy --filename-suffix \"\" -o ${proto_file_out_dir}")
-
   file(MAKE_DIRECTORY ${proto_file_out_dir})
 
   add_custom_command(
       OUTPUT ${proto_file_out_name}
-      COMMAND flatc ${flatc_args} --cpp ${protopath_absolute}
+      COMMAND flatc
+          --no-cpp-direct-copy
+          --filename-suffix ""
+          -o "${proto_file_out_dir}"
+          --cpp "${protopath_absolute}"
       DEPENDS flatc ${protopath_absolute}
   )
 

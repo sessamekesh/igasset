@@ -14,15 +14,30 @@ function (gen_flatbuffer_cpp)
   set(proto_file_out_dir "${proto_include_dir}/${GFC_BIN_PATH_NAME}")
   set(proto_file_out_name "${proto_file_out_dir}/${generated_file_name}.h")
   get_filename_component(protopath_absolute "${GFC_SCHEMA_FILE}" ABSOLUTE)
+
+  # CMake strips empty-string arguments from add_custom_command COMMAND lists
+  # before they reach the build tool, making it impossible to pass
+  # --filename-suffix "" directly.  Instead we emit a tiny cmake -P script
+  # that contains the empty string as a literal, and invoke it at build time.
+  # The script receives the flatc path via -D so it works with generator
+  # expressions ($<TARGET_FILE:flatc>).
+  set(_flatc_runner "${CMAKE_CURRENT_BINARY_DIR}/${GFC_TARGET_NAME}_run_flatc.cmake")
+  file(WRITE "${_flatc_runner}" [=[
+execute_process(
+    COMMAND "${FLATC}" --no-cpp-direct-copy --filename-suffix "" -o "${OUTDIR}" --cpp "${SCHEMA}"
+    COMMAND_ERROR_IS_FATAL ANY
+)
+]=])
+
   file(MAKE_DIRECTORY ${proto_file_out_dir})
 
   add_custom_command(
       OUTPUT ${proto_file_out_name}
-      COMMAND flatc
-          --no-cpp-direct-copy
-          --filename-suffix ""
-          -o "${proto_file_out_dir}"
-          --cpp "${protopath_absolute}"
+      COMMAND ${CMAKE_COMMAND}
+          "-DFLATC=$<TARGET_FILE:flatc>"
+          "-DOUTDIR=${proto_file_out_dir}"
+          "-DSCHEMA=${protopath_absolute}"
+          -P "${_flatc_runner}"
       DEPENDS flatc ${protopath_absolute}
   )
 

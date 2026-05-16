@@ -1,0 +1,111 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "_base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+
+    {
+      "name": "_windows",
+      "hidden": true,
+      "inherits": "_base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+
+    {
+      "name": "_linux",
+      "hidden": true,
+      "inherits": "_base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+
+    {
+      "name": "windows-clang-cl-debug",
+      "displayName": "Windows clang-cl Debug",
+      "description": "Recommended Windows dev preset. Must be configured from a VS Developer PowerShell so INCLUDE/LIB and link.exe are on PATH.",
+      "inherits": "_windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_LINKER_TYPE": "MSVC",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+
+    {
+      "name": "windows-clang-cl-release",
+      "displayName": "Windows clang-cl Release",
+      "inherits": "windows-clang-cl-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows MSVC Debug (CI parity)",
+      "description": "Used to verify the code still compiles under MSVC. Must be configured from a VS Developer PowerShell.",
+      "inherits": "_windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_LINKER_TYPE": "MSVC",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows MSVC Release (CI parity)",
+      "inherits": "windows-msvc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+
+    {
+      "name": "linux-clang-debug",
+      "displayName": "Linux clang Debug",
+      "inherits": "_linux",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+
+    {
+      "name": "linux-clang-release",
+      "displayName": "Linux clang Release",
+      "inherits": "linux-clang-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "windows-clang-cl-debug",   "configurePreset": "windows-clang-cl-debug" },
+    { "name": "windows-clang-cl-release", "configurePreset": "windows-clang-cl-release" },
+    { "name": "windows-msvc-debug",       "configurePreset": "windows-msvc-debug" },
+    { "name": "windows-msvc-release",     "configurePreset": "windows-msvc-release" },
+    { "name": "linux-clang-debug",        "configurePreset": "linux-clang-debug" },
+    { "name": "linux-clang-release",      "configurePreset": "linux-clang-release" }
+  ]
+}

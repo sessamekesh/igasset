@@ -48,11 +48,12 @@ target_link_libraries(igasset-gen
           assimp draco_lib stb)
 target_include_directories(igasset-gen
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
-          "${CMAKE_BINARY_DIR}"
-          "${draco_SOURCE_DIR}/src")
+          "${CMAKE_BINARY_DIR}")
+target_include_directories(igasset-gen SYSTEM
+  PRIVATE "${draco_SOURCE_DIR}/src")
 
 if (IGASSET_ENABLE_BASISU_SUPPORT)
   target_link_libraries(igasset-gen PRIVATE basisu_encoder)
-  target_include_directories(igasset-gen PRIVATE "${basisu_SOURCE_DIR}")
+  target_include_directories(igasset-gen SYSTEM PRIVATE "${basisu_SOURCE_DIR}")
   target_compile_definitions(igasset-gen PRIVATE IGASSET_ENABLE_BASISU_SUPPORT=1)
 endif ()

@@ -35,13 +35,14 @@ set(igasset_sources
 if (IGASSET_BUILD_IGASSET_DECODER)
   add_library(igasset STATIC ${igasset_headers} ${igasset_sources})
   set_property(TARGET igasset PROPERTY CXX_STANDARD 23)
-  target_include_directories(igasset PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${draco_SOURCE_DIR}/src")
+  target_include_directories(igasset PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
   target_include_directories(igasset PUBLIC "${CMAKE_BINARY_DIR}")
+  target_include_directories(igasset SYSTEM PUBLIC "${draco_SOURCE_DIR}/src")
   target_link_libraries(igasset
     PUBLIC igasset_types_schema igasset_schema igpack_schema
            spdlog::spdlog glm::glm draco_lib)
   if (IGASSET_ENABLE_BASISU_SUPPORT)
-    target_include_directories(igasset PUBLIC "${basisu_SOURCE_DIR}")
+    target_include_directories(igasset SYSTEM PUBLIC "${basisu_SOURCE_DIR}")
     target_link_libraries(igasset PUBLIC basisu_encoder)
     target_compile_definitions(igasset PRIVATE IGASSET_ENABLE_BASISU_SUPPORT=1)
   else ()

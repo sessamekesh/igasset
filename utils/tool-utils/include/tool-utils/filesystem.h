@@ -1,8 +1,7 @@
-#ifndef IGASSET_GEN_FILESYSTEM_H
-#define IGASSET_GEN_FILESYSTEM_H
+#ifndef IGASSET_TOOL_UTILS_FILESYSTEM_H
+#define IGASSET_TOOL_UTILS_FILESYSTEM_H
 
 #include <flatbuffers/flatbuffer_builder.h>
-#include <igasset-gen/exec-config.h>
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
@@ -12,16 +11,19 @@
 #include <optional>
 #include <string>
 
-namespace igassetgen {
+namespace toolutils {
 
+//
+// Filesystem - small async wrapper around binary I/O used by the generator
+// tools (igasset-gen, igpack-bundle, ...). Reads happen synchronously on the
+// calling thread; writes can be enqueued onto the provided I/O TaskList.
+//
 class Filesystem : public std::enable_shared_from_this<Filesystem> {
  public:
   Filesystem(std::shared_ptr<spdlog::logger> log,
-             std::shared_ptr<igasync::TaskList> io_task_list,
-             PlanInvocationConfig config)
+             std::shared_ptr<igasync::TaskList> io_task_list)
       : log_(log->clone("Filesystem")),
-        io_task_list_(io_task_list),
-        config_(config) {}
+        io_task_list_(std::move(io_task_list)) {}
 
   std::shared_ptr<igasync::Promise<bool>> write_bin_async(
       std::filesystem::path path,
@@ -35,9 +37,8 @@ class Filesystem : public std::enable_shared_from_this<Filesystem> {
  private:
   std::shared_ptr<spdlog::logger> log_;
   std::shared_ptr<igasync::TaskList> io_task_list_;
-  PlanInvocationConfig config_;
 };
 
-}  // namespace igassetgen
+}  // namespace toolutils
 
 #endif

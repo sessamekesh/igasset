@@ -1,7 +1,9 @@
-#include <igasset-gen/filesystem.h>
 #if IGASSET_ENABLE_BASISU_SUPPORT
 #include <encoder/basisu_enc.h>
 #endif
+#include <tool-utils/filesystem.h>
+#include <tool-utils/log-level.h>
+#include <tool-utils/runtime-timer.h>
 
 #include <flatbuffers/idl.h>
 #include <igasset-gen/igasset-generator.h>
@@ -20,35 +22,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-
-enum class LogLevel : int {
-  Error,
-  Warn,
-  Debug,
-  Info,
-  Trace,
-};
-
-class RuntimeTimer {
- public:
-  RuntimeTimer(std::shared_ptr<spdlog::logger> log, std::string task_name)
-      : log_(log),
-        task_name_(task_name),
-        start_(std::chrono::high_resolution_clock::now()) {}
-  ~RuntimeTimer() {
-    auto end = std::chrono::high_resolution_clock::now();
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
-
-    log_->info("Executed {} in {}ms", task_name_,
-               static_cast<float>(elapsed.count()) / 1000.f);
-  }
-
- private:
-  std::shared_ptr<spdlog::logger> log_;
-  std::string task_name_;
-  std::chrono::high_resolution_clock::time_point start_;
-};
+#include <map>
 
 #if IGASSET_ENABLE_BASISU_SUPPORT
 class BasisuRaii {
@@ -69,7 +43,7 @@ int main(int argc, char** argv) {
   //
   // Input asset path root (for reading input asset files)
   std::string input_asset_path_root;
-  app.add_option("-w,--input_asset_path_root", input_asset_path_root,
+  app.add_option("-i,--input_asset_path_root", input_asset_path_root,
                  "Root directory for resolving input asset file paths")
       ->required(false)
       ->default_str(std::filesystem::current_path().string())
@@ -87,7 +61,7 @@ int main(int argc, char** argv) {
   // Input plan file path (JSON formatted)
   std::string input_plan_file_path;
   app.add_option(
-         "-i,--input_plan_file", input_plan_file_path,
+         "input_plan_file", input_plan_file_path,
          "Path of the Indigo asset pack plan file (*.igasset-plan.json) "
          "that should be processed by this tool")
       ->required(true)
@@ -102,6 +76,8 @@ int main(int argc, char** argv) {
          "JSON parser should read in igasset-gen-plan files. Assumed to be in "
          "PATH by default, set this value to give a specific location.")
       ->required(false)
+      ->default_str(
+          (std::filesystem::current_path() / "igasset-gen-plan.fbs").string())
       ->check(CLI::ExistingFile);
 
   //
@@ -126,11 +102,13 @@ int main(int argc, char** argv) {
 
   //
   // Log level - corresponds to SPDLog levels
-  LogLevel log_level{LogLevel::Warn};
-  std::map<std::string, LogLevel> log_level_map{
-      {"ERROR", LogLevel::Error}, {"WARN", LogLevel::Warn},
-      {"DEBUG", LogLevel::Debug}, {"INFO", LogLevel::Info},
-      {"TRACE", LogLevel::Trace},
+  toolutils::LogLevel log_level{toolutils::LogLevel::Warn};
+  std::map<std::string, toolutils::LogLevel> log_level_map{
+      {"ERROR", toolutils::LogLevel::Error},
+      {"WARN", toolutils::LogLevel::Warn},
+      {"DEBUG", toolutils::LogLevel::Debug},
+      {"INFO", toolutils::LogLevel::Info},
+      {"TRACE", toolutils::LogLevel::Trace},
   };
   app.add_option("-l,--log_level", log_level,
                  "Level of verbosity in logs - 'ERROR', 'WARN', 'DEBUG', "
@@ -146,28 +124,12 @@ int main(int argc, char** argv) {
 
   //
   // RAII lifetime concerns for the app...
-  RuntimeTimer timer(log, "IgassetGen");
+  toolutils::RuntimeTimer timer(log, "IgassetGen");
 #if IGASSET_ENABLE_BASISU_SUPPORT
   BasisuRaii basisu_raii;
 #endif
 
-  switch (log_level) {
-    case LogLevel::Error:
-      log->set_level(spdlog::level::err);
-      break;
-    case LogLevel::Warn:
-      log->set_level(spdlog::level::warn);
-      break;
-    case LogLevel::Debug:
-      log->set_level(spdlog::level::debug);
-      break;
-    case LogLevel::Info:
-      log->set_level(spdlog::level::info);
-      break;
-    case LogLevel::Trace:
-      log->set_level(spdlog::level::trace);
-      break;
-  }
+  log->set_level(toolutils::to_spdlog_level(log_level));
 
   //
   // Validate args...
@@ -195,7 +157,8 @@ int main(int argc, char** argv) {
 
     std::filesystem::path const schema_file_path =
         std::filesystem::absolute(schema_path);
-    std::filesystem::path const schema_include_root = schema_file_path.parent_path();
+    std::filesystem::path const schema_include_root =
+        schema_file_path.parent_path();
     std::string const schema_include_root_posix =
         schema_include_root.generic_string();
     std::string const schema_file_posix = schema_file_path.generic_string();
@@ -293,7 +256,7 @@ int main(int argc, char** argv) {
   log->info("Starting IgAsset generation for {} assets...",
             igasset_gen_plan->actions()->size());
   auto filesystem =
-      std::make_shared<igassetgen::Filesystem>(log, io_task_list, config);
+      std::make_shared<toolutils::Filesystem>(log, io_task_list);
   igassetgen::IgassetGenerator generator(log, config, io_task_list,
                                          exec_task_list, filesystem);
 

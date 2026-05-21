@@ -4,12 +4,12 @@
 #include <igasset-gen/assimp-geo-processor.h>
 #include <igasset-gen/basisu-processor.h>
 #include <igasset-gen/exec-config.h>
-#include <igasset-gen/filesystem.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasset-gen/wgsl-copy-processor.h>
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
+#include <tool-utils/filesystem.h>
 
 #include <memory>
 #include <optional>
@@ -22,7 +22,7 @@ class IgassetGenerator {
                    PlanInvocationConfig config,
                    std::shared_ptr<igasync::TaskList> io_task_list,
                    std::shared_ptr<igasync::TaskList> exec_task_list,
-                   std::shared_ptr<Filesystem> filesystem)
+                   std::shared_ptr<toolutils::Filesystem> filesystem)
       : log_(log->clone("IgassetGenerator")),
         config_(config),
         io_task_list_(io_task_list),
@@ -46,7 +46,7 @@ class IgassetGenerator {
   BasisuProcessor& basisu_processor() const;
 
  private:
-  std::shared_ptr<Filesystem> filesystem_;
+  std::shared_ptr<toolutils::Filesystem> filesystem_;
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
   std::shared_ptr<igasync::TaskList> io_task_list_;

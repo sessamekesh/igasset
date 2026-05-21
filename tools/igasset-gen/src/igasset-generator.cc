@@ -1,13 +1,13 @@
 #include <igasset-gen/assimp-geo-processor.h>
 #include <igasset-gen/basisu-processor.h>
 #include <igasset-gen/exec-config.h>
-#include <igasset-gen/filesystem.h>
 #include <igasset-gen/igasset-generator.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasset-gen/wgsl-copy-processor.h>
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
+#include <tool-utils/filesystem.h>
 
 #include <memory>
 

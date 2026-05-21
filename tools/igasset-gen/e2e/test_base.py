@@ -81,7 +81,7 @@ def run_igasset_gen(
     Parameters
     ----------
     bin_path:         Path to the igasset-gen executable.
-    plan_json:        Path to the *.igasset-gen.json plan file.
+    plan_json:        Path to the *.igasset-gen.json plan file (positional).
     asset_root:       Directory used to resolve relative input_file_path values (-w).
     output_dir:       Directory where .igasset files are written (-o).
     schema:           Path to igasset-gen-plan.fbs (-s).
@@ -90,8 +90,7 @@ def run_igasset_gen(
     """
     cmd: list[str] = [
         str(bin_path),
-        "-i", str(plan_json),
-        "-w", str(asset_root),
+        "-i", str(asset_root),
         "-o", str(output_dir),
         "-s", str(schema),
     ]
@@ -99,6 +98,7 @@ def run_igasset_gen(
         cmd.append("--single-threaded")
     if extra_args:
         cmd.extend(extra_args)
+    cmd.append(str(plan_json))
 
     return subprocess.run(
         cmd,

@@ -120,7 +120,7 @@ def enumerate_igasset_bin(request: pytest.FixtureRequest) -> Path:
 
 @pytest.fixture(scope="session")
 def asset_root(request: pytest.FixtureRequest) -> Path:
-    """Root directory that contains raw test input assets (e.g. .wgsl, .png)."""
+    """Root directory that contains raw test input assets."""
     return _resolve_path(
         request,
         cli_opt="asset-root",

@@ -1,0 +1,5 @@
+# Pin line endings for deterministic test inputs.
+test_assets/*.wgsl text eol=lf
+
+# Belt-and-suspenders: ensure binary assets are never mangled.
+test_assets/*.png binary

@@ -1,0 +1,14 @@
+{
+  "igpack_gen_actions": [
+    {
+      "output_path": "single-wgsl.igpack",
+      "igasset_sources": [
+        {
+          "file_path": "simple-wgsl.igasset",
+          "source_type": "WgslSource",
+          "igasset_name": "simple-wgsl"
+        }
+      ]
+    }
+  ]
+}

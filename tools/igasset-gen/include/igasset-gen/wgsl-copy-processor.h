@@ -2,11 +2,11 @@
 #define IGASSET_GEN_WGSL_COPY_PROCESSOR_H
 
 #include <igasset-gen/exec-config.h>
-#include <igasset-gen/filesystem.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
+#include <tool-utils/filesystem.h>
 
 #include <memory>
 
@@ -18,7 +18,7 @@ class WgslCopyProcessor {
                     PlanInvocationConfig config,
                     std::shared_ptr<igasync::TaskList> io_task_list,
                     std::shared_ptr<igasync::TaskList> exec_task_list,
-                    std::shared_ptr<Filesystem> filesystem)
+                    std::shared_ptr<toolutils::Filesystem> filesystem)
       : log_(log->clone("WgslCopyProcessor")),
         config_(config),
         io_task_list_(io_task_list),
@@ -52,7 +52,7 @@ class WgslCopyProcessor {
   PlanInvocationConfig config_;
   std::shared_ptr<igasync::TaskList> io_task_list_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
-  std::shared_ptr<Filesystem> filesystem_;
+  std::shared_ptr<toolutils::Filesystem> filesystem_;
 };
 
 }  // namespace igassetgen

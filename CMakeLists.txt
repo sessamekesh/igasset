@@ -22,6 +22,7 @@ add_subdirectory(extern)
 include(cmake/gen_flatbuffer_cpp.cmake)
 
 add_subdirectory(igasset)
+add_subdirectory(utils)
 
 if (IGASSET_BUILD_GEN_TOOLS)
   add_subdirectory(tools)

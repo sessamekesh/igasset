@@ -1,3 +1,5 @@
 add_subdirectory(enumerate-assimp)
 add_subdirectory(enumerate-igasset)
+add_subdirectory(enumerate-igpack)
 add_subdirectory(igasset-gen)
+add_subdirectory(igpack-bundle)

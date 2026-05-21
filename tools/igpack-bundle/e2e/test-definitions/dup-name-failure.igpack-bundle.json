@@ -1,0 +1,24 @@
+{
+  "igpack_gen_actions": [
+    {
+      "output_path": "dup-name-failure.igpack",
+      "igasset_sources": [
+        {
+          "file_path": "simple-wgsl.igasset",
+          "source_type": "WgslSource",
+          "igasset_name": "simple-wgsl"
+        },
+        {
+          "file_path": "glass-etc1s.igasset",
+          "source_type": "Texture2D",
+          "igasset_name": "glass"
+        },
+        {
+          "file_path": "glass-rgba8.igasset",
+          "source_type": "Texture2D",
+          "igasset_name": "glass"
+        }
+      ]
+    }
+  ]
+}

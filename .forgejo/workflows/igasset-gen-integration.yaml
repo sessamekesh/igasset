@@ -32,9 +32,18 @@ jobs:
           cmake --build build
           --target igasset-gen
           --target enumerate-igasset
+          --target igpack-bundle
+          --target enumerate-igpack
 
-      - name: Run Integration Tests
+      - name: Run igasset-gen Integration Tests
         env:
           IGASSET_GEN_BIN: build/tools/igasset-gen/igasset-gen
           ENUMERATE_IGASSET_BIN: build/tools/enumerate-igasset/enumerate-igasset
         run: pytest tools/igasset-gen/e2e/ -v
+
+      - name: Run igpack-bundle Integration Tests
+        env:
+          IGASSET_GEN_BIN: build/tools/igasset-gen/igasset-gen
+          IGPACK_BUNDLE_BIN: build/tools/igpack-bundle/igpack-bundle
+          ENUMERATE_IGPACK_BIN: build/tools/enumerate-igpack/enumerate-igpack
+        run: pytest tools/igpack-bundle/e2e/ -v

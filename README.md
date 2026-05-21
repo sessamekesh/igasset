@@ -1,6 +1,7 @@
-# igasset: C++20 Game asset bundle format + decoder optimized for the web
+# igasset: C++23 Game asset bundle format + decoder optimized for the web
 
-> [!NOTE] This repository is still under active migration from a closed-source module - it is incomplete, and documentation in this README file is slightly wrong. See Roadmap / TODO section below.
+> [!IMPORTANT]  
+> This repository is still under active migration from a closed-source module - it is incomplete, and documentation in this README file is slightly wrong. See Roadmap / TODO section below.
 
 Features:
 

@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 constexpr flatbuffers::Verifier::Options get_opts() {
   flatbuffers::Verifier::Options opts{};
@@ -127,6 +128,71 @@ bool pack_image2d(flatbuffers::FlatBufferBuilder& fbb,
                                             IgAsset::SingleAssetData_Image2D,
                                             image2d_out.Union()));
 
+  return true;
+}
+
+bool pack_draco_geo(flatbuffers::FlatBufferBuilder& fbb,
+                    std::vector<flatbuffers::Offset<IgAsset::SingleAsset>>& sads,
+                    std::shared_ptr<spdlog::logger> log,
+                    toolutils::Filesystem& filesystem,
+                    const std::string& asset_name,
+                    std::filesystem::path igasset_path) {
+  auto raw_igasset = filesystem.read_bin(igasset_path);
+  if (!raw_igasset.has_value()) {
+    log->error("Could not read igasset at path {}", igasset_path.string());
+    return false;
+  }
+
+  auto* igasset = ::get_asset(*raw_igasset, igasset_path.string(), log);
+  if (igasset == nullptr) {
+    return false;
+  }
+
+  if (igasset->asset_type() != IgAsset::SingleAssetData_DracoGeometry) {
+    log->error("Igasset at {} is not a DracoGeometry", igasset_path.string());
+    return false;
+  }
+
+  auto* geo = igasset->asset_as_DracoGeometry();
+
+  auto draco_bin =
+      geo->draco_bin() != nullptr
+          ? fbb.CreateVector(geo->draco_bin()->Data(), geo->draco_bin()->size())
+          : 0;
+
+  flatbuffers::Offset<
+      flatbuffers::Vector<flatbuffers::Offset<flatbuffers::String>>>
+      ozz_bone_names = 0;
+  if (geo->ozz_bone_names() != nullptr) {
+    std::vector<std::string> names;
+    names.reserve(geo->ozz_bone_names()->size());
+    for (const auto* name : *geo->ozz_bone_names()) {
+      names.push_back(name->str());
+    }
+    ozz_bone_names = fbb.CreateVectorOfStrings(names);
+  }
+
+  flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<IgAsset::Mat4>>>
+      ozz_inv_bind_poses = 0;
+  if (geo->ozz_inv_bind_poses() != nullptr) {
+    std::vector<flatbuffers::Offset<IgAsset::Mat4>> poses;
+    poses.reserve(geo->ozz_inv_bind_poses()->size());
+    for (const auto* pose : *geo->ozz_inv_bind_poses()) {
+      auto values = fbb.CreateVector(reinterpret_cast<const float*>(pose->values()->Data()),
+                                     pose->values()->size() / sizeof(float));
+      poses.push_back(IgAsset::CreateMat4(fbb, values));
+    }
+    ozz_inv_bind_poses = fbb.CreateVector(poses);
+  }
+
+  auto geo_out = IgAsset::CreateDracoGeometry(
+      fbb, geo->pos_attrib(), geo->normal_attrib(), geo->tangent_attrib(),
+      geo->bitangent_attrib(), geo->texcoord_attrib(), geo->bone_idx_attrib(),
+      geo->bone_weight_attrib(), draco_bin, geo->index_format(),
+      ozz_bone_names, ozz_inv_bind_poses);
+  sads.push_back(IgAsset::CreateSingleAsset(
+      fbb, fbb.CreateString(asset_name),
+      IgAsset::SingleAssetData_DracoGeometry, geo_out.Union()));
   return true;
 }
 
@@ -396,6 +462,12 @@ int main(int argc, char** argv) {
         case IgPackGen::IgassetSourceType::IgassetSourceType_Texture2D:
           if (!::pack_image2d(fbb, sads, log, *filesystem, igasset_name,
                               igasset_path)) {
+            return EXIT_FAILURE;
+          }
+          break;
+        case IgPackGen::IgassetSourceType::IgassetSourceType_DracoGeometry:
+          if (!::pack_draco_geo(fbb, sads, log, *filesystem, igasset_name,
+                                igasset_path)) {
             return EXIT_FAILURE;
           }
           break;

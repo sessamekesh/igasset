@@ -61,9 +61,9 @@ endif ()
 # The FlatBuffers parser resolves includes relative to the schema's parent
 # directory, so all three must live in the same folder.
 set(_igasset_gen_schema_files
-  "${CMAKE_SOURCE_DIR}/schema/igasset-gen-plan.fbs"
-  "${CMAKE_SOURCE_DIR}/schema/igasset.fbs"
-  "${CMAKE_SOURCE_DIR}/schema/types.fbs")
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../schema/igasset-gen-plan.fbs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../schema/igasset.fbs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../schema/types.fbs")
 add_custom_command(TARGET igasset-gen POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     ${_igasset_gen_schema_files}

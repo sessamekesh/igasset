@@ -9,3 +9,13 @@ enum Image2DEncoding : byte {
   ETC1S = 2,
   UASTC_LDR_4_4 = 3,
 }
+
+table Sprite {
+  name: string;
+
+  // Coordinates and dimensions in pixels - must fit in the underlying Image2D asset.
+  x: int;
+  y: int;
+  w: int;
+  h: int;
+}

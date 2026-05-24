@@ -6,17 +6,20 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME igpack_bundle_igasset_schema
   SCHEMA_FILE "../../schema/igasset.fbs"
-  BIN_PATH_NAME "igpack-bundle/schema")
+  BIN_PATH_NAME "igpack-bundle/schema"
+  SCHEMA_TARGETS igpack_bundle_types_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME igpack_bundle_igpack_schema
   SCHEMA_FILE "../../schema/igpack.fbs"
-  BIN_PATH_NAME "igpack-bundle/schema")
+  BIN_PATH_NAME "igpack-bundle/schema"
+  SCHEMA_TARGETS igpack_bundle_igasset_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME igpack_bundle_igpack_bundle_schema
   SCHEMA_FILE "../../schema/igpack-bundle-plan.fbs"
-  BIN_PATH_NAME "igpack-bundle/schema")
+  BIN_PATH_NAME "igpack-bundle/schema"
+  SCHEMA_TARGETS igpack_bundle_igasset_schema)
 
 set(igpack-bundle-headers
   "include/igpack-bundle/exec-config.h")

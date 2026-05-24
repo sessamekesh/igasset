@@ -5,6 +5,7 @@
 #include <igasset/image2d.h>
 #include <igasset/schema/igasset.h>
 #include <igasset/schema/igpack.h>
+#include <igasset/spritesheet.h>
 #include <igasset/wgsl_source.h>
 
 #include <memory>
@@ -53,6 +54,8 @@ class IgpackDecoder {
 
     o.raw_data_ = "";
     o.asset_pack_ = nullptr;
+
+    return *this;
   }
   ~IgpackDecoder() = default;
 
@@ -72,6 +75,12 @@ class IgpackDecoder {
   // Textures (2D)
  public:
   std::variant<Image2D, IgpackExtractError> extract_image2d(
+      const std::string& asset_name, Image2DFormat format) const;
+
+  //
+  // Spritesheets
+ public:
+  std::variant<Spritesheet, IgpackExtractError> extract_spritesheet(
       const std::string& asset_name, Image2DFormat format) const;
 
  private:

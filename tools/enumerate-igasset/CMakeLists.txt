@@ -6,7 +6,8 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME enumerate_igasset_igasset_schema
   SCHEMA_FILE "../../schema/igasset.fbs"
-  BIN_PATH_NAME "enumerate-igasset/schema")
+  BIN_PATH_NAME "enumerate-igasset/schema"
+  SCHEMA_TARGETS enumerate_igasset_types_schema)
 
 set(enumerate-igasset-target-sources
   "main.cc")

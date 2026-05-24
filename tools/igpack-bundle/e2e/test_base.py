@@ -48,12 +48,25 @@ class Image2DContents:
     bits_per_pixel: float
 
 @dataclass
+class SpritesheetContents:
+    """Fields from the '------- Spritesheet Contents -------' section."""
+    encoding: str
+    width: int
+    height: int
+    data_bytelength: int
+    data_hash: str
+    bits_per_pixel: float
+    sprite_count: int
+
+
+@dataclass
 class SingleAsset:
   """Metadata and contents for a single asset in the asset pack."""
   name: str
   asset_type: str
   wgsl: Optional[WgslContents] = None
   image2d: Optional[Image2DContents] = None
+  spritesheet: Optional[SpritesheetContents] = None
 
 @dataclass
 class EnumerateResult:
@@ -188,13 +201,15 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
   inner_kv: dict[str, str] = {}
   wgsl_kv: dict[str, str] = {}
   image2d_kv: dict[str, str] = {}
+  spritesheet_kv: dict[str, str] = {}
 
   # In-progress asset: name/type come before optional Wgsl/Image2D subsections.
   pending_name: str = ""
   pending_type: str = ""
 
   known_top_headers = frozenset({"Asset Pack Summary"})
-  known_sub_headers = frozenset({"WgslSource Contents", "Image2D Contents"})
+  known_sub_headers = frozenset({"WgslSource Contents", "Image2D Contents",
+                                  "Spritesheet Contents"})
 
   def flush_pending_asset() -> None:
     """Turn pending_* + subsection dicts into a SingleAsset and append."""
@@ -220,18 +235,31 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
           data_hash=image2d_kv.get("Data hash", ""),
           bits_per_pixel=float(image2d_kv.get("Bits per pixel", "0")),
       )
+    spritesheet: Optional[SpritesheetContents] = None
+    if spritesheet_kv:
+      spritesheet = SpritesheetContents(
+          encoding=spritesheet_kv.get("Encoding", ""),
+          width=int(spritesheet_kv.get("Width", "0")),
+          height=int(spritesheet_kv.get("Height", "0")),
+          data_bytelength=int(spritesheet_kv.get("Data bytelength", "0")),
+          data_hash=spritesheet_kv.get("Data hash", ""),
+          bits_per_pixel=float(spritesheet_kv.get("Bits per pixel", "0")),
+          sprite_count=int(spritesheet_kv.get("Sprite count", "0")),
+      )
     assets_out.append(
         SingleAsset(
             name=pending_name,
             asset_type=pending_type,
             wgsl=wgsl,
             image2d=image2d,
+            spritesheet=spritesheet,
         )
     )
     pending_name = ""
     pending_type = ""
     wgsl_kv.clear()
     image2d_kv.clear()
+    spritesheet_kv.clear()
 
   def is_section_header(stripped: str) -> bool:
     return stripped.startswith("------- ") and stripped.endswith(" -------")
@@ -258,10 +286,14 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
           wgsl_kv.clear()
           section = "wgsl"
           inner_kv = wgsl_kv
-        else:
+        elif label == "Image2D Contents":
           image2d_kv.clear()
           section = "image2d"
           inner_kv = image2d_kv
+        else:
+          spritesheet_kv.clear()
+          section = "spritesheet"
+          inner_kv = spritesheet_kv
         continue
 
       # Outer per-asset header: ------- <asset name> -------
@@ -276,7 +308,7 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
       # Listing line: " - name (Type)"  — ignore.
       continue
 
-    if section in ("wgsl", "image2d") and ":" in stripped:
+    if section in ("wgsl", "image2d", "spritesheet") and ":" in stripped:
       k, v = _parse_kv(stripped)
       inner_kv[k] = v
       continue

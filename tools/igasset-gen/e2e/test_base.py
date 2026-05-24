@@ -51,11 +51,24 @@ class Image2DContents:
 
 
 @dataclass
+class SpritesheetContents:
+    """Fields from the '------- Spritesheet Contents -------' section."""
+    encoding: str
+    width: int
+    height: int
+    data_bytelength: int
+    data_hash: str
+    bits_per_pixel: float
+    sprite_count: int
+
+
+@dataclass
 class EnumerateResult:
     """Complete parsed output from a single enumerate-igasset run."""
     summary: AssetSummary
     wgsl: Optional[WgslContents] = None
     image2d: Optional[Image2DContents] = None
+    spritesheet: Optional[SpritesheetContents] = None
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +181,7 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
     summary_kv: dict[str, str] = {}
     wgsl_kv: dict[str, str] = {}
     image2d_kv: dict[str, str] = {}
+    spritesheet_kv: dict[str, str] = {}
 
     for line in lines:
         stripped = line.strip()
@@ -186,6 +200,9 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
             elif label == "Image2D Contents":
                 section = "image2d"
                 kv = image2d_kv
+            elif label == "Spritesheet Contents":
+                section = "spritesheet"
+                kv = spritesheet_kv
             else:
                 section = "unknown"
                 kv = {}
@@ -226,7 +243,21 @@ def _parse_enumerate_output(stdout: str) -> EnumerateResult:
             bits_per_pixel=float(image2d_kv.get("Bits per pixel", "0")),
         )
 
-    return EnumerateResult(summary=summary, wgsl=wgsl, image2d=image2d)
+    # Optional Spritesheet section
+    spritesheet: Optional[SpritesheetContents] = None
+    if spritesheet_kv:
+        spritesheet = SpritesheetContents(
+            encoding=spritesheet_kv.get("Encoding", ""),
+            width=int(spritesheet_kv.get("Width", "0")),
+            height=int(spritesheet_kv.get("Height", "0")),
+            data_bytelength=int(spritesheet_kv.get("Data bytelength", "0")),
+            data_hash=spritesheet_kv.get("Data hash", ""),
+            bits_per_pixel=float(spritesheet_kv.get("Bits per pixel", "0")),
+            sprite_count=int(spritesheet_kv.get("Sprite count", "0")),
+        )
+
+    return EnumerateResult(summary=summary, wgsl=wgsl, image2d=image2d,
+                           spritesheet=spritesheet)
 
 
 # ---------------------------------------------------------------------------

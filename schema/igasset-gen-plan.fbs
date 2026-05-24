@@ -59,6 +59,31 @@ table ImageToTexture2DAction {
   outputs: [Output2DImage];
 }
 
+table SpriteSubAction {
+  // File to read for this sprite
+  input_file_path: string;
+
+  // How to crop the input image
+  crop_left: int = 0;
+  crop_top: int = 0;
+  crop_right: int = -1;
+  crop_bottom: int = -1;
+
+  // Texture coordinates at which this element should be placed
+  sprite: IgAsset.Sprite;
+}
+
+table GenerateSpritesheetAction {
+  output_image: Output2DImage;
+
+  default_r: float = 0.0;
+  default_g: float = 0.0;
+  default_b: float = 0.0;
+  default_a: float = 1.0;
+
+  sprites: [SpriteSubAction];
+}
+
 //
 // BUNDLE / PLAN TYPES
 //
@@ -66,7 +91,8 @@ table ImageToTexture2DAction {
 union SingleIgassetGenActionData {
   CopyWgslSourceAction,
   AssimpToDracoAction,
-  ImageToTexture2DAction
+  ImageToTexture2DAction,
+  GenerateSpritesheetAction
 }
 
 table SingleIgassetGenAction {

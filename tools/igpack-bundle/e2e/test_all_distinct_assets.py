@@ -1,12 +1,13 @@
 """
-Integration tests for igpack-bundle, three-distinct-assets plan.
+Integration tests for igpack-bundle, all-distinct-assets plan.
 
-Plan file : test-definitions/three-distinct-assets.igpack-bundle.json
-Inputs    : prep_igassets_dir/{simple-wgsl,glass-etc1s,glass-rgba8}.igasset
-Output    : three-distinct-assets.igpack
+Plan file : test-definitions/all-distinct-assets.igpack-bundle.json
+Inputs    : prep_igassets_dir/{simple-wgsl,glass-etc1s,glass-rgba8,sprites}.igasset
+Output    : all-distinct-assets.igpack
 
-Asserts that a pack with one WgslSource and two Image2D assets (one ETC1S,
-one RGBA8Unorm) is produced with the expected per-asset metadata.
+Asserts that a pack with one WgslSource, two Image2D assets (ETC1S and
+RGBA8Unorm), and one Spritesheet asset is produced with the expected
+per-asset metadata.
 """
 
 from __future__ import annotations
@@ -27,21 +28,20 @@ from test_base import (
 #
 # Constants drawn from the plan JSON + expected values captured offline.
 
-_PLAN_FILENAME = "three-distinct-assets.igpack-bundle.json"
-_OUTPUT_FILENAME = "three-distinct-assets.igpack"
+_PLAN_FILENAME = "all-distinct-assets.igpack-bundle.json"
+_OUTPUT_FILENAME = "all-distinct-assets.igpack"
 
 _NAME_WGSL = "simple-wgsl"
 _NAME_ETC1S = "glass-etc1"
 _NAME_RGBA8 = "glass-rgba8"
-_EXPECTED_NAMES = frozenset({_NAME_WGSL, _NAME_ETC1S, _NAME_RGBA8})
+_NAME_SPRITES = "sprites"
+_EXPECTED_NAMES = frozenset({_NAME_WGSL, _NAME_ETC1S, _NAME_RGBA8, _NAME_SPRITES})
 
 _EXPECTED_VERTEX_EP = "vertex-main"
 _EXPECTED_FRAGMENT_EP = "fragment-main"
 _EXPECTED_COMPUTE_EP = "compute-main"
 
 # Same input .wgsl as test_single_wgsl, so the source hash must match.
-# Asset is pinned to LF via .gitattributes; see test_single_wgsl.py for
-# why this matters.
 _EXPECTED_WGSL_SOURCE_BYTELENGTH = 171
 _EXPECTED_WGSL_SOURCE_HASH: Optional[str] = (
     "c12d065a259869334bacdd58f74f7dfee49f63adc37dc448a292957fab1dd5c6"
@@ -50,15 +50,17 @@ _EXPECTED_WGSL_SOURCE_HASH: Optional[str] = (
 _EXPECTED_IMAGE_WIDTH = 512
 _EXPECTED_IMAGE_HEIGHT = 512
 
-# RGBA8Unorm is uncompressed: bytes = width * height * 4.  The image data
-# itself comes from stb_image_resize, which is deterministic for a fixed
-# library version, but pinning the hash makes this fragile across upgrades.
 _EXPECTED_RGBA8_DATA_BYTELENGTH = _EXPECTED_IMAGE_WIDTH * _EXPECTED_IMAGE_HEIGHT * 4
 _EXPECTED_RGBA8_DATA_HASH: Optional[str] = None
 
-# ETC1S is a lossy compressed encoding; basisu encoder output may vary
-# across CPU/encoder versions, so the hash is not asserted by default.
 _EXPECTED_ETC1S_DATA_HASH: Optional[str] = None
+
+_EXPECTED_SPRITESHEET_WIDTH = 256
+_EXPECTED_SPRITESHEET_HEIGHT = 256
+_EXPECTED_SPRITESHEET_DATA_BYTELENGTH = (
+    _EXPECTED_SPRITESHEET_WIDTH * _EXPECTED_SPRITESHEET_HEIGHT * 4
+)
+_EXPECTED_SPRITESHEET_SPRITE_COUNT = 4
 
 _EXPECTED_PACK_SHA256: Optional[str] = None
 
@@ -74,7 +76,7 @@ def bundle_result(
     test_definitions_dir: Path,
     tmp_path_factory: pytest.TempPathFactory,
 ) -> tuple[int, Path, str, str]:
-    output_dir = tmp_path_factory.mktemp("three_distinct_out")
+    output_dir = tmp_path_factory.mktemp("all_distinct_out")
     plan = test_definitions_dir / _PLAN_FILENAME
     proc = run_igpack_bundle(
         bin_path=igpack_bundle_bin,
@@ -127,8 +129,8 @@ def test_output_file_exists(bundle_result: tuple[int, Path, str, str]) -> None:
     )
 
 
-def test_summary_asset_count_is_three(enumerate_result: EnumerateResult) -> None:
-    assert enumerate_result.summary.asset_count == 3
+def test_summary_asset_count_is_four(enumerate_result: EnumerateResult) -> None:
+    assert enumerate_result.summary.asset_count == 4
 
 
 def test_summary_file_size_nonzero(enumerate_result: EnumerateResult) -> None:
@@ -168,7 +170,6 @@ def test_etc1s_asset_details(enumerate_result: EnumerateResult) -> None:
     assert img.width == _EXPECTED_IMAGE_WIDTH
     assert img.height == _EXPECTED_IMAGE_HEIGHT
     assert img.data_bytelength > 0, "ETC1S image had zero-length data block"
-    # ETC1S compresses ~4 bits/texel; observed ~1.7 bpp for glass.png at 512x512.
     assert 0 < img.bits_per_pixel < 8.0
     assert_hash_if_known(img.data_hash, _EXPECTED_ETC1S_DATA_HASH)
 
@@ -184,3 +185,16 @@ def test_rgba8_asset_details(enumerate_result: EnumerateResult) -> None:
     assert img.data_bytelength == _EXPECTED_RGBA8_DATA_BYTELENGTH
     assert img.bits_per_pixel == pytest.approx(32.0)
     assert_hash_if_known(img.data_hash, _EXPECTED_RGBA8_DATA_HASH)
+
+
+def test_spritesheet_asset_details(enumerate_result: EnumerateResult) -> None:
+    asset = _find(enumerate_result, _NAME_SPRITES)
+    assert asset.asset_type == "Spritesheet"
+    ss = asset.spritesheet
+    assert ss is not None, "Spritesheet Contents section was not parsed"
+    assert ss.encoding == "RGBA8Unorm"
+    assert ss.width == _EXPECTED_SPRITESHEET_WIDTH
+    assert ss.height == _EXPECTED_SPRITESHEET_HEIGHT
+    assert ss.data_bytelength == _EXPECTED_SPRITESHEET_DATA_BYTELENGTH
+    assert ss.bits_per_pixel == pytest.approx(32.0)
+    assert ss.sprite_count == _EXPECTED_SPRITESHEET_SPRITE_COUNT

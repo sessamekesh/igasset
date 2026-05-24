@@ -21,6 +21,8 @@ static constexpr std::string to_string(IgAsset::SingleAssetData type) {
       return "OzzAnimation";
     case IgAsset::SingleAssetData_Image2D:
       return "Image2D";
+    case IgAsset::SingleAssetData_Spritesheet:
+      return "Spritesheet";
     default:
       return "<< Unknown >>";
   }
@@ -67,6 +69,34 @@ static void dump_wgsl_contents(const IgAsset::WgslSource* wgsl_source) {
             << wgsl_source->fragment_entry_point()->str() << std::endl;
   std::cout << "Compute entry point: "
             << wgsl_source->compute_entry_point()->str() << std::endl;
+}
+
+static void dump_spritesheet_contents(const IgAsset::Spritesheet* spritesheet) {
+  std::cout << "------- Spritesheet Contents -------" << std::endl;
+  auto const* img = spritesheet->image();
+  if (img == nullptr) {
+    std::cout << "(no embedded image)" << std::endl;
+    return;
+  }
+  std::cout << "Encoding: " << to_string(img->encoding()) << std::endl;
+  std::cout << "Width: " << img->width() << std::endl;
+  std::cout << "Height: " << img->height() << std::endl;
+  auto const* pixels = img->data();
+  size_t const nbytes = pixels ? pixels->size() : 0;
+  std::cout << "Data bytelength: " << nbytes << std::endl;
+  std::string const data_hash =
+      nbytes > 0 ? picosha2::hash256_hex_string(pixels->data(),
+                                                pixels->data() + nbytes)
+                 : picosha2::hash256_hex_string(std::string{});
+  std::cout << "Data hash: " << data_hash << std::endl;
+  std::cout << "Bits per pixel: "
+            << (img->width() && img->height()
+                    ? nbytes * 8.f /
+                          static_cast<float>(img->width() * img->height())
+                    : 0.f)
+            << std::endl;
+  auto const* sprites = spritesheet->sprites();
+  std::cout << "Sprite count: " << (sprites ? sprites->size() : 0) << std::endl;
 }
 
 static void dump_image2d_contents(const IgAsset::Image2D* image2d) {

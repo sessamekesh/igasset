@@ -67,6 +67,9 @@ int main(int argc, char** argv) {
     case IgAsset::SingleAssetData_Image2D:
       dump_image2d_contents(asset->asset_as_Image2D());
       break;
+    case IgAsset::SingleAssetData_Spritesheet:
+      dump_spritesheet_contents(asset->asset_as_Spritesheet());
+      break;
     default:
       break;
   }

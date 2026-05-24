@@ -3,6 +3,7 @@
 #include <igasset/igpack_decoder.h>
 #include <igasset/image2d.h>
 #include <igasset/schema/igasset.h>
+#include <igasset/spritesheet.h>
 #include <igasset/vertex_types.h>
 #include <igasset/wgsl_source.h>
 #include <spdlog/spdlog.h>
@@ -142,6 +143,35 @@ std::variant<Image2D, IgpackExtractError> IgpackDecoder::extract_image2d(
   }
 
   return IgpackExtractError::ResourceNotFound;
+}
+
+std::variant<Spritesheet, IgpackExtractError>
+IgpackDecoder::extract_spritesheet(const std::string& asset_name,
+                                   Image2DFormat format) const {
+  for (const auto* asset : *asset_pack_->assets()) {
+    if (asset->name()->str() != asset_name) {
+      continue;
+    }
+
+    if (asset->data_type() != IgAsset::SingleAssetData_Spritesheet) {
+      return IgpackExtractError::WrongResourceType;
+    }
+
+    auto spritesheet =
+        Spritesheet::Unpack(asset->data_as_Spritesheet(), format);
+
+    if (!spritesheet.has_value()) {
+      auto log = spdlog::default_logger()->clone("IgpackDecoder");
+      log->error(
+          "Spritesheet asset {} failed to unpack - invalid format or data",
+          asset_name);
+      return IgpackExtractError::AssetExtractError;
+    }
+
+    return *std::move(spritesheet);
+  }
+
+  return IgpackExtractError::AssetExtractError;
 }
 
 }  // namespace igasset

@@ -6,12 +6,14 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME igasset_schema
   SCHEMA_FILE "../schema/igasset.fbs"
-  BIN_PATH_NAME "igasset/schema")
+  BIN_PATH_NAME "igasset/schema"
+  SCHEMA_TARGETS igasset_types_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME igpack_schema
   SCHEMA_FILE "../schema/igpack.fbs"
-  BIN_PATH_NAME "igasset/schema")
+  BIN_PATH_NAME "igasset/schema"
+  SCHEMA_TARGETS igasset_schema)
 
 set(igasset_headers
   "include/igasset/generators/plane.h"
@@ -19,6 +21,7 @@ set(igasset_headers
   "include/igasset/fb_utils.h"
   "include/igasset/igpack_decoder.h"
   "include/igasset/image2d.h"
+  "include/igasset/spritesheet.h"
   "include/igasset/index_buffer.h"
   "include/igasset/vertex_types.h"
   "include/igasset/wgsl_source.h")
@@ -29,6 +32,7 @@ set(igasset_sources
   "src/fb_utils.cc"
   "src/igpack_decoder.cc"
   "src/image2d.cc"
+  "src/spritesheet.cc"
   "src/index_buffer.cc"
   "src/wgsl_source.cc")
 

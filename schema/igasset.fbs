@@ -57,6 +57,11 @@ table Image2D {
   data: [ubyte];
 }
 
+table Spritesheet {
+  image: Image2D;
+  sprites: [IgAsset.Sprite];
+}
+
 //
 // AGGREGATE / BUNDLES
 //
@@ -65,7 +70,8 @@ union SingleAssetData {
   DracoGeometry,
   OzzSkeleton,
   OzzAnimation,
-  Image2D
+  Image2D,
+  Spritesheet
 }
 
 table Asset {

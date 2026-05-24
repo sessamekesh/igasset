@@ -2,16 +2,8 @@ include "igasset.fbs";
 
 namespace IgPackGen;
 
-enum IgassetSourceType : byte {
-  Unknown,
-  WgslSource,
-  DracoGeometry,
-  Texture2D
-}
-
 table IgassetSource {
   file_path: string;
-  source_type: IgassetSourceType; // TODO (kamaron): Remove, this is redundant!
   igasset_name: string;
 }
 

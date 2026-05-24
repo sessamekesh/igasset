@@ -2,9 +2,11 @@
 #define IGASSET_GEN_BASISU_PROCESSOR_H
 
 #include <encoder/basisu_enc.h>
+#include <flatbuffers/buffer.h>
 #include <flatbuffers/flatbuffer_builder.h>
 #include <igasset-gen/exec-config.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
+#include <igasset-gen/schema/igasset.h>
 #include <igasset-gen/stb-parse.h>
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
@@ -28,17 +30,17 @@ class BasisuProcessor {
         io_task_list_(io_task_list),
         exec_task_list_(exec_task_list),
         filesystem_(filesystem) {}
-  BasisuProcessor(const BasisuProcessor&) = delete;
-  BasisuProcessor& operator=(const BasisuProcessor&) = delete;
-  BasisuProcessor(BasisuProcessor&&) = default;
-  BasisuProcessor& operator=(BasisuProcessor&&) = default;
-  ~BasisuProcessor() = default;
 
  public:
   //
   // Execute an ImageToTexture2DAction
   std::shared_ptr<igasync::Promise<bool>> execute_image_to_texture2d(
       const IgAssetGen::ImageToTexture2DAction* action) const;
+
+  //
+  // Execute a GenerateSpritesheetAction
+  std::shared_ptr<igasync::Promise<bool>> execute_generate_spritesheet(
+      const IgAssetGen::GenerateSpritesheetAction* action) const;
 
  private:
   enum class AltResult {
@@ -50,16 +52,19 @@ class BasisuProcessor {
 
   //
   // Individual output generation functions
+  using Image2DGenRsl = std::variant<flatbuffers::Offset<IgAsset::Image2D>,
+                                     BasisuProcessor::AltResult>;
+
   std::shared_ptr<igasync::Promise<bool>> generate_single_output(
       const IgAssetGen::Output2DImage* output, const StbImageData& data) const;
-  std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
-               BasisuProcessor::AltResult>
-  rgba8_unorm_out(const IgAssetGen::Output2DImage* output,
-                  const StbImageData& data) const;
-  std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
-               BasisuProcessor::AltResult>
-  basisu_ldr_out(const IgAssetGen::Output2DImage* output,
-                 const StbImageData& data) const;
+  Image2DGenRsl rgba8_unorm_out(
+      const IgAssetGen::Output2DImage* output,
+      std::shared_ptr<flatbuffers::FlatBufferBuilder> fbb,
+      const StbImageData& data) const;
+  Image2DGenRsl basisu_ldr_out(
+      const IgAssetGen::Output2DImage* output,
+      std::shared_ptr<flatbuffers::FlatBufferBuilder> fbb,
+      const StbImageData& data) const;
 
  private:
   std::shared_ptr<spdlog::logger> log_;

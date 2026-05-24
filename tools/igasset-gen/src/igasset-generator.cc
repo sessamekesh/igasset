@@ -51,6 +51,9 @@ std::shared_ptr<igasync::Promise<bool>> IgassetGenerator::generate_igasset(
     case IgAssetGen::SingleIgassetGenActionData_ImageToTexture2DAction:
       return basisu_processor().execute_image_to_texture2d(
           action->action_as_ImageToTexture2DAction());
+    case IgAssetGen::SingleIgassetGenActionData_GenerateSpritesheetAction:
+      return basisu_processor().execute_generate_spritesheet(
+          action->action_as_GenerateSpritesheetAction());
     default:
       log_->error("Invalid ACTION_TYPE {}",
                   static_cast<int>(action->action_type()));

@@ -1,7 +1,7 @@
 function (gen_flatbuffer_cpp)
   set(options)
   set(oneValueArgs TARGET_NAME SCHEMA_FILE BIN_PATH_NAME)
-  set(multiValueArgs)
+  set(multiValueArgs SCHEMA_TARGETS)
   cmake_parse_arguments(GFC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if (NOT TARGET flatc)
@@ -31,6 +31,18 @@ execute_process(
 
   file(MAKE_DIRECTORY ${proto_file_out_dir})
 
+  set(_schema_target_deps "")
+  foreach(_schema_target IN LISTS GFC_SCHEMA_TARGETS)
+    if (NOT TARGET ${_schema_target})
+      message(FATAL_ERROR "gen_flatbuffer_cpp(${GFC_TARGET_NAME}): schema target '${_schema_target}' does not exist")
+    endif ()
+    get_target_property(_dep_header ${_schema_target} GFC_GENERATED_HEADER)
+    if (NOT _dep_header OR _dep_header STREQUAL "_dep_header-NOTFOUND")
+      message(FATAL_ERROR "gen_flatbuffer_cpp(${GFC_TARGET_NAME}): schema target '${_schema_target}' has no GFC_GENERATED_HEADER property")
+    endif ()
+    list(APPEND _schema_target_deps "${_dep_header}")
+  endforeach ()
+
   add_custom_command(
       OUTPUT ${proto_file_out_name}
       COMMAND ${CMAKE_COMMAND}
@@ -38,11 +50,16 @@ execute_process(
           "-DOUTDIR=${proto_file_out_dir}"
           "-DSCHEMA=${protopath_absolute}"
           -P "${_flatc_runner}"
-      DEPENDS flatc ${protopath_absolute}
+      DEPENDS flatc ${protopath_absolute} ${_schema_target_deps}
   )
 
   add_library(${GFC_TARGET_NAME} INTERFACE ${proto_file_out_name})
   target_include_directories(${GFC_TARGET_NAME} INTERFACE ${proto_include_dir})
   target_link_libraries(${GFC_TARGET_NAME} INTERFACE flatbuffers)
-  set_target_properties(${GFC_TARGET_NAME} PROPERTIES FOLDER flatbuffer_libs)
+  if (GFC_SCHEMA_TARGETS)
+    target_link_libraries(${GFC_TARGET_NAME} INTERFACE ${GFC_SCHEMA_TARGETS})
+  endif ()
+  set_target_properties(${GFC_TARGET_NAME} PROPERTIES
+    FOLDER flatbuffer_libs
+    GFC_GENERATED_HEADER "${proto_file_out_name}")
 endfunction ()

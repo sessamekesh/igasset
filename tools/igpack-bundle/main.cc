@@ -3,6 +3,7 @@
 #include <flatbuffers/verifier.h>
 #include <igasset-gen/schema/igasset.h>
 #include <igasset/schema/igpack.h>
+#include <igasset/schema/types.h>
 #include <spdlog/logger.h>
 #include <tool-utils/filesystem.h>
 #include <tool-utils/log-level.h>
@@ -49,25 +50,8 @@ bool pack_wgsl_source(
     flatbuffers::FlatBufferBuilder& fbb,
     std::vector<flatbuffers::Offset<IgAsset::SingleAsset>>& sads,
     std::shared_ptr<spdlog::logger> log, toolutils::Filesystem& filesystem,
-    const std::string& asset_name, std::filesystem::path igasset_path) {
-  auto raw_igasset = filesystem.read_bin(igasset_path);
-  if (!raw_igasset.has_value()) {
-    log->error("Could not read igasset at path {}", igasset_path.string());
-    return false;
-  }
-
-  auto* igasset = ::get_asset(*raw_igasset, igasset_path.string(), log);
-  if (igasset == nullptr) {
-    return false;
-  }
-
-  if (igasset->asset_type() != IgAsset::SingleAssetData_WgslSource) {
-    log->error("Igasset at {} is not a WGSL source", igasset_path.string());
-    return false;
-  }
-
-  auto wgsl_source = igasset->asset_as_WgslSource();
-
+    const std::string& asset_name, std::filesystem::path igasset_path,
+    const IgAsset::WgslSource* wgsl_source) {
   auto source = fbb.CreateString(wgsl_source->source()->str());
   auto vertex_entry_point =
       wgsl_source->vertex_entry_point() != nullptr
@@ -96,25 +80,8 @@ bool pack_image2d(flatbuffers::FlatBufferBuilder& fbb,
                   std::shared_ptr<spdlog::logger> log,
                   toolutils::Filesystem& filesystem,
                   const std::string& asset_name,
-                  std::filesystem::path igasset_path) {
-  auto raw_igasset = filesystem.read_bin(igasset_path);
-  if (!raw_igasset.has_value()) {
-    log->error("Could not read igasset at path {}", igasset_path.string());
-    return false;
-  }
-
-  auto* igasset = ::get_asset(*raw_igasset, igasset_path.string(), log);
-  if (igasset == nullptr) {
-    return false;
-  }
-
-  if (igasset->asset_type() != IgAsset::SingleAssetData_Image2D) {
-    log->error("Igasset at {} is not an Image2D", igasset_path.string());
-    return false;
-  }
-
-  auto* image2d = igasset->asset_as_Image2D();
-
+                  std::filesystem::path igasset_path,
+                  const IgAsset::Image2D* image2d) {
   auto encoding = image2d->encoding();
   auto width = image2d->width();
   auto height = image2d->height();
@@ -131,30 +98,89 @@ bool pack_image2d(flatbuffers::FlatBufferBuilder& fbb,
   return true;
 }
 
-bool pack_draco_geo(flatbuffers::FlatBufferBuilder& fbb,
-                    std::vector<flatbuffers::Offset<IgAsset::SingleAsset>>& sads,
-                    std::shared_ptr<spdlog::logger> log,
-                    toolutils::Filesystem& filesystem,
-                    const std::string& asset_name,
-                    std::filesystem::path igasset_path) {
-  auto raw_igasset = filesystem.read_bin(igasset_path);
-  if (!raw_igasset.has_value()) {
-    log->error("Could not read igasset at path {}", igasset_path.string());
+bool pack_spritesheet(
+    flatbuffers::FlatBufferBuilder& fbb,
+    std::vector<flatbuffers::Offset<IgAsset::SingleAsset>>& sads,
+    std::shared_ptr<spdlog::logger> log, toolutils::Filesystem& filesystem,
+    const std::string& asset_name, std::filesystem::path igasset_path,
+    const IgAsset::Spritesheet* spritesheet) {
+  auto fb_in_image = spritesheet->image();
+  if (fb_in_image == nullptr) {
+    log->error("Spritesheet {} - expected 'image' missing in input.",
+               asset_name);
     return false;
   }
 
-  auto* igasset = ::get_asset(*raw_igasset, igasset_path.string(), log);
-  if (igasset == nullptr) {
+  auto fb_in_sprites = spritesheet->sprites();
+  if (fb_in_sprites == nullptr) {
+    log->error("Spritesheet {} - expected 'sprites' missing in input.",
+               asset_name);
     return false;
   }
 
-  if (igasset->asset_type() != IgAsset::SingleAssetData_DracoGeometry) {
-    log->error("Igasset at {} is not a DracoGeometry", igasset_path.string());
+  std::vector<flatbuffers::Offset<IgAsset::Sprite>> out_sprites;
+  for (std::size_t i = 0; i < fb_in_sprites->size(); i++) {
+    auto* fb_in_sprite = fb_in_sprites->Get(i);
+    auto fb_in_name = fb_in_sprite->name();
+    if (fb_in_name == nullptr) {
+      log->error(
+          "Spritesheet {} - expected 'sprites[{}].name' missing in input.",
+          asset_name, i);
+      return false;
+    }
+
+    if (fb_in_sprite->x() < 0 || fb_in_sprite->x() >= fb_in_image->width() ||
+        fb_in_sprite->y() < 0 || fb_in_sprite->y() >= fb_in_image->height() ||
+        fb_in_sprite->w() < 0 || fb_in_sprite->h() < 0 ||
+        (fb_in_sprite->x() + fb_in_sprite->w()) > fb_in_image->width() ||
+        (fb_in_sprite->y() + fb_in_sprite->h()) > fb_in_image->height()) {
+      log->error(
+          "Spritesheet {} sprite #{} - location [{}, {}] and size {} x {} is "
+          "incompatible with underlying image size {} x {}",
+          asset_name, i, fb_in_sprite->x(), fb_in_sprite->y(),
+          fb_in_sprite->w(), fb_in_sprite->h(), fb_in_image->width(),
+          fb_in_image->height());
+      return false;
+    }
+
+    auto fb_out_sprite = IgAsset::CreateSprite(
+        fbb, fbb.CreateString(fb_in_name->str()), fb_in_sprite->x(),
+        fb_in_sprite->y(), fb_in_sprite->w(), fb_in_sprite->h());
+    out_sprites.push_back(fb_out_sprite);
+  }
+
+  auto encoding = fb_in_image->encoding();
+  auto width = fb_in_image->width();
+  auto height = fb_in_image->height();
+  auto data = fb_in_image->data() != nullptr
+                  ? fbb.CreateVector(fb_in_image->data()->Data(),
+                                     fb_in_image->data()->size())
+                  : 0;
+
+  if (width <= 0 || height <= 0 || data.IsNull()) {
+    log->error(
+        "Failed to output spritesheet {} with dimensions {}x{} and data size "
+        "{}",
+        asset_name, width, height, data.IsNull() ? "0" : "(valid)");
     return false;
   }
 
-  auto* geo = igasset->asset_as_DracoGeometry();
+  auto fb_spritesheet_out = IgAsset::CreateSpritesheet(
+      fbb, IgAsset::CreateImage2D(fbb, encoding, width, height, data),
+      fbb.CreateVector(out_sprites));
 
+  sads.push_back(IgAsset::CreateSingleAsset(
+      fbb, fbb.CreateString(asset_name), IgAsset::SingleAssetData_Spritesheet,
+      fb_spritesheet_out.Union()));
+  return true;
+}
+
+bool pack_draco_geo(
+    flatbuffers::FlatBufferBuilder& fbb,
+    std::vector<flatbuffers::Offset<IgAsset::SingleAsset>>& sads,
+    std::shared_ptr<spdlog::logger> log, toolutils::Filesystem& filesystem,
+    const std::string& asset_name, std::filesystem::path igasset_path,
+    const IgAsset::DracoGeometry* geo) {
   auto draco_bin =
       geo->draco_bin() != nullptr
           ? fbb.CreateVector(geo->draco_bin()->Data(), geo->draco_bin()->size())
@@ -178,8 +204,9 @@ bool pack_draco_geo(flatbuffers::FlatBufferBuilder& fbb,
     std::vector<flatbuffers::Offset<IgAsset::Mat4>> poses;
     poses.reserve(geo->ozz_inv_bind_poses()->size());
     for (const auto* pose : *geo->ozz_inv_bind_poses()) {
-      auto values = fbb.CreateVector(reinterpret_cast<const float*>(pose->values()->Data()),
-                                     pose->values()->size() / sizeof(float));
+      auto values = fbb.CreateVector(
+          reinterpret_cast<const float*>(pose->values()->Data()),
+          pose->values()->size() / sizeof(float));
       poses.push_back(IgAsset::CreateMat4(fbb, values));
     }
     ozz_inv_bind_poses = fbb.CreateVector(poses);
@@ -188,11 +215,11 @@ bool pack_draco_geo(flatbuffers::FlatBufferBuilder& fbb,
   auto geo_out = IgAsset::CreateDracoGeometry(
       fbb, geo->pos_attrib(), geo->normal_attrib(), geo->tangent_attrib(),
       geo->bitangent_attrib(), geo->texcoord_attrib(), geo->bone_idx_attrib(),
-      geo->bone_weight_attrib(), draco_bin, geo->index_format(),
-      ozz_bone_names, ozz_inv_bind_poses);
+      geo->bone_weight_attrib(), draco_bin, geo->index_format(), ozz_bone_names,
+      ozz_inv_bind_poses);
   sads.push_back(IgAsset::CreateSingleAsset(
-      fbb, fbb.CreateString(asset_name),
-      IgAsset::SingleAssetData_DracoGeometry, geo_out.Union()));
+      fbb, fbb.CreateString(asset_name), IgAsset::SingleAssetData_DracoGeometry,
+      geo_out.Union()));
   return true;
 }
 
@@ -416,7 +443,8 @@ int main(int argc, char** argv) {
         igasset_names.insert(igasset_name);
 
         if (!std::filesystem::exists(igasset_path)) {
-          log->error("No igasset found at {}, aborting!", igasset_path.string());
+          log->error("No igasset found at {}, aborting!",
+                     igasset_path.string());
           return EXIT_FAILURE;
         }
 
@@ -452,22 +480,43 @@ int main(int argc, char** argv) {
       std::string igasset_name = igasset_source->igasset_name()->str();
       log->info("> Packing {} ({})...", igasset_name, igasset_path.string());
 
-      switch (igasset_source->source_type()) {
-        case IgPackGen::IgassetSourceType::IgassetSourceType_WgslSource:
+      auto raw_igasset = filesystem->read_bin(igasset_path);
+      if (!raw_igasset.has_value()) {
+        log->error("Could not read igasset at path {}", igasset_path.string());
+        return EXIT_FAILURE;
+      }
+
+      auto* igasset = ::get_asset(*raw_igasset, igasset_path.string(), log);
+      if (igasset == nullptr) {
+        log->error("Could not igasset parse file {}", igasset_path.string());
+        return EXIT_FAILURE;
+      }
+
+      switch (igasset->asset_type()) {
+        case IgAsset::SingleAssetData_WgslSource:
           if (!::pack_wgsl_source(fbb, sads, log, *filesystem, igasset_name,
-                                  igasset_path)) {
+                                  igasset_path,
+                                  igasset->asset_as_WgslSource())) {
             return EXIT_FAILURE;
           }
           break;
-        case IgPackGen::IgassetSourceType::IgassetSourceType_Texture2D:
+        case IgAsset::SingleAssetData_Image2D:
           if (!::pack_image2d(fbb, sads, log, *filesystem, igasset_name,
-                              igasset_path)) {
+                              igasset_path, igasset->asset_as_Image2D())) {
             return EXIT_FAILURE;
           }
           break;
-        case IgPackGen::IgassetSourceType::IgassetSourceType_DracoGeometry:
+        case IgAsset::SingleAssetData_DracoGeometry:
           if (!::pack_draco_geo(fbb, sads, log, *filesystem, igasset_name,
-                                igasset_path)) {
+                                igasset_path,
+                                igasset->asset_as_DracoGeometry())) {
+            return EXIT_FAILURE;
+          }
+          break;
+        case IgAsset::SingleAssetData_Spritesheet:
+          if (!::pack_spritesheet(fbb, sads, log, *filesystem, igasset_name,
+                                  igasset_path,
+                                  igasset->asset_as_Spritesheet())) {
             return EXIT_FAILURE;
           }
           break;

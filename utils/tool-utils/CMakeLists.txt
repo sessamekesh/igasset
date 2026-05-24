@@ -6,7 +6,8 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME toolutils_igasset_schema
   SCHEMA_FILE "../../schema/igasset.fbs"
-  BIN_PATH_NAME "tool-utils/schema")
+  BIN_PATH_NAME "tool-utils/schema"
+  SCHEMA_TARGETS toolutils_types_schema)
 
 set(tool-utils-headers
   "include/tool-utils/filesystem.h"

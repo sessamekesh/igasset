@@ -6,17 +6,20 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME igasset_gen_igasset_schema
   SCHEMA_FILE "../../schema/igasset.fbs"
-  BIN_PATH_NAME "igasset-gen/schema")
+  BIN_PATH_NAME "igasset-gen/schema"
+  SCHEMA_TARGETS igasset_gen_types_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME igasset_gen_igpack_schema
   SCHEMA_FILE "../../schema/igpack.fbs"
-  BIN_PATH_NAME "igasset-gen/schema")
+  BIN_PATH_NAME "igasset-gen/schema"
+  SCHEMA_TARGETS igasset_gen_igasset_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME igasset_gen_plan_schema
   SCHEMA_FILE "../../schema/igasset-gen-plan.fbs"
-  BIN_PATH_NAME "igasset-gen/schema")
+  BIN_PATH_NAME "igasset-gen/schema"
+  SCHEMA_TARGETS igasset_gen_igasset_schema)
 
 set(igasset-gen-headers
   "include/igasset-gen/assimp-geo-processor.h"

@@ -5,7 +5,6 @@
       "igasset_sources": [
         {
           "file_path": "simple-wgsl.igasset",
-          "source_type": "WgslSource",
           "igasset_name": "simple-wgsl"
         }
       ]

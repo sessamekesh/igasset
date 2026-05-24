@@ -6,12 +6,14 @@ gen_flatbuffer_cpp(
 gen_flatbuffer_cpp(
   TARGET_NAME enumerate_igpack_igasset_schema
   SCHEMA_FILE "../../schema/igasset.fbs"
-  BIN_PATH_NAME "enumerate-igpack/schema")
+  BIN_PATH_NAME "enumerate-igpack/schema"
+  SCHEMA_TARGETS enumerate_igpack_types_schema)
 
 gen_flatbuffer_cpp(
   TARGET_NAME enumerate_igpack_igpack_schema
   SCHEMA_FILE "../../schema/igpack.fbs"
-  BIN_PATH_NAME "enumerate-igpack/schema")
+  BIN_PATH_NAME "enumerate-igpack/schema"
+  SCHEMA_TARGETS enumerate_igpack_igasset_schema)
 
 set(enumerate-igpack-target-sources "main.cc")
 

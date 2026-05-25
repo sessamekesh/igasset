@@ -85,7 +85,7 @@ static std::optional<Image2D> unpack_basisu(
   if (!transcoder.start_transcoding(flatbuffer_data->data()->data(),
                                     flatbuffer_data->data()->size())) {
     auto log = spdlog::default_logger()->clone("Image2D");
-    log->error("Could start Basisu transcoding");
+    log->error("Could not start Basisu transcoding");
     return std::nullopt;
   }
 
@@ -124,11 +124,13 @@ std::optional<Image2D> Image2D::Unpack(const IgAsset::Image2D* flatbuffer_data,
 #if IGASSET_ENABLE_BASISU_SUPPORT
       return unpack_basisu(flatbuffer_data, image_format);
 #else
+    {
       auto log = spdlog::default_logger()->clone("Image2D");
       log->warn(
           "Cannot unpack unsupported encoding - build igasset with "
           "IGASSET_ENABLE_BASISU_SUPPORT to use");
       return std::nullopt;
+    }
 #endif
   }
 

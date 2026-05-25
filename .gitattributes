@@ -3,3 +3,9 @@ test_assets/*.wgsl text eol=lf
 
 # Belt-and-suspenders: ensure binary assets are never mangled.
 test_assets/*.png binary
+test_assets/*.jpg binary
+test_assets/*.jpeg binary
+test_assets/*.ktx2 binary
+test_assets/*.drc binary
+*.igpack binary
+*.igasset binary

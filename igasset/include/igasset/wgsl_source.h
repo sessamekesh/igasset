@@ -1,5 +1,5 @@
-#ifndef IGASSET_WGSL_SORUCE_H
-#define IGASSET_WGSL_SORUCE_H
+#ifndef IGASSET_WGSL_SOURCE_H
+#define IGASSET_WGSL_SOURCE_H
 
 #include <igasset/schema/igasset.h>
 

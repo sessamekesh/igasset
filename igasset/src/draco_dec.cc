@@ -20,8 +20,6 @@ std::string igasset::to_string(DracoDecoderErrorType err_type) {
     default:
       return "DracoDecoderErrorType-Unknown";
   }
-
-  return "DracoDecoderErrorType-Unknown";
 }
 
 namespace igasset {
@@ -30,7 +28,7 @@ DracoDecoder::~DracoDecoder() = default;
 
 std::variant<DracoDecoder, DracoDecoderError> DracoDecoder::Create(
     const char* draco_buffer, size_t draco_buffer_len, int position_attrib,
-    int normal_quat_attrib, IndexBufferType index_buffer_type,
+    int normal_attrib, IndexBufferType index_buffer_type,
     std::vector<std::string> bone_names,
     std::vector<glm::mat4> bone_inv_bind_poses, int tangent_attrib,
     int bitangent_attrib, int texcoord_attrib, int bone_idx_attrib,
@@ -59,7 +57,7 @@ std::variant<DracoDecoder, DracoDecoderError> DracoDecoder::Create(
   }
 
   return DracoDecoder(std::move(mesh_rsl).value(), position_attrib,
-                      normal_quat_attrib, tangent_attrib, bitangent_attrib,
+                      normal_attrib, tangent_attrib, bitangent_attrib,
                       texcoord_attrib, bone_idx_attrib, bone_weight_attrib,
                       index_buffer_type, std::move(bone_names),
                       std::move(bone_inv_bind_poses));
@@ -213,7 +211,7 @@ std::variant<std::vector<glm::mat4>, DracoDecoderError>
 DracoDecoder::get_bone_inv_bind_poses() const {
   if (bone_inv_bind_poses_.size() == 0) {
     return DracoDecoderError{DracoDecoderErrorType::MeshDataMissing,
-                             "Bone names not present on this model"};
+                             "Bone inverse bind poses not present on this model"};
   }
 
   return bone_inv_bind_poses_;

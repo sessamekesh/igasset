@@ -9,6 +9,7 @@
 #include <igasset/wgsl_source.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -36,7 +37,7 @@ constexpr const char* to_string(IgpackExtractError err) {
 
 class IgpackDecoder {
  public:
-  static std::shared_ptr<IgpackDecoder> Create(std::string data);
+  static std::optional<std::shared_ptr<IgpackDecoder>> Create(std::string data);
 
   IgpackDecoder(const IgpackDecoder&) = delete;
   IgpackDecoder& operator=(const IgpackDecoder&) = delete;
@@ -54,7 +55,6 @@ class IgpackDecoder {
 
     o.raw_data_ = "";
     o.asset_pack_ = nullptr;
-
     return *this;
   }
   ~IgpackDecoder() = default;
@@ -62,7 +62,7 @@ class IgpackDecoder {
   //
   // WGSL Shaders
  public:
-  std::variant<igasset::WgslSource, IgpackExtractError> extract_wgl_shader(
+  std::variant<igasset::WgslSource, IgpackExtractError> extract_wgsl_shader(
       const std::string& asset_name) const;
 
   //

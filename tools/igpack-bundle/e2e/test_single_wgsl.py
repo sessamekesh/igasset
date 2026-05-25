@@ -37,10 +37,8 @@ _EXPECTED_VERTEX_EP = "vertex-main"
 _EXPECTED_FRAGMENT_EP = "fragment-main"
 _EXPECTED_COMPUTE_EP = "compute-main"
 
-# Byte-for-byte copy of test_assets/copy-wgsl-source.wgsl.  The asset is
-# pinned to LF line endings via .gitattributes so these values are stable
-# across all platforms (without the pin, Windows checkouts would see 176
-# bytes / a different hash due to CRLF translation).
+# Byte-for-byte copy of test_assets/copy-wgsl-source.wgsl; stable across platforms.
+# Hash and size reflect LF line endings (normalized via .gitattributes).
 _EXPECTED_SOURCE_BYTELENGTH = 171
 _EXPECTED_SOURCE_HASH: Optional[str] = (
     "c12d065a259869334bacdd58f74f7dfee49f63adc37dc448a292957fab1dd5c6"

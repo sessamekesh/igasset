@@ -42,6 +42,7 @@ _EXPECTED_FRAGMENT_EP = "fragment-main"
 _EXPECTED_COMPUTE_EP = "compute-main"
 
 # Same input .wgsl as test_single_wgsl, so the source hash must match.
+# Hash and size reflect LF line endings (normalized via .gitattributes).
 _EXPECTED_WGSL_SOURCE_BYTELENGTH = 171
 _EXPECTED_WGSL_SOURCE_HASH: Optional[str] = (
     "c12d065a259869334bacdd58f74f7dfee49f63adc37dc448a292957fab1dd5c6"

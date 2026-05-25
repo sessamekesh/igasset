@@ -4,7 +4,6 @@
 #include <flatbuffers/string.h>
 
 #include <string>
-#include <string_view>
 
 namespace igasset::util {
 

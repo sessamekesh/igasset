@@ -8,6 +8,7 @@ namespace igasset {
 
 std::vector<PositionNormalVertexData3D> PlaneGenerator::get_pos_norm_verts()
     const {
+  glm::vec3 normal{0.f, 1.f, 0.f};
   std::vector<PositionNormalVertexData3D> vertices;
 
   vertices.push_back(PositionNormalVertexData3D{

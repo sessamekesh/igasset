@@ -11,7 +11,6 @@ namespace igasset {
 
 struct PlaneGenerator {
   glm::vec3 position = glm::vec3{0.f, 0.f, 0.f};
-  glm::vec3 normal = glm::vec3{0.f, 1.f, 0.f};
   float width = 1.f;
   float depth = 1.f;
 

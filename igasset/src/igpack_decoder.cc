@@ -33,19 +33,20 @@ constexpr flatbuffers::Verifier::Options get_opts() {
 
 namespace igasset {
 
-std::shared_ptr<IgpackDecoder> IgpackDecoder::Create(std::string data) {
+std::optional<std::shared_ptr<IgpackDecoder>> IgpackDecoder::Create(
+    std::string data) {
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data.data());
   auto verifier = flatbuffers::Verifier(data_ptr, data.size(), ::get_opts());
   if (!IgAsset::VerifyAssetPackBuffer(verifier)) {
     SPDLOG_ERROR("Asset pack failed flatbuffer verification");
-    return nullptr;
+    return std::nullopt;
   }
 
   return std::shared_ptr<IgpackDecoder>(new IgpackDecoder(std::move(data)));
 }
 
 std::variant<igasset::WgslSource, IgpackExtractError>
-IgpackDecoder::extract_wgl_shader(const std::string& asset_name) const {
+IgpackDecoder::extract_wgsl_shader(const std::string& asset_name) const {
   for (const auto* asset : *asset_pack_->assets()) {
     if (asset->name()->str() != asset_name) {
       continue;

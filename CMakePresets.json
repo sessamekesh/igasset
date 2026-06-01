@@ -36,6 +36,19 @@
     },
 
     {
+      "name": "_emscripten",
+      "hidden": true,
+      "inherits": "_base",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "environment": {
+        "EMSCRIPTEN": "$env{EMSDK}/upstream/emscripten"
+      },
+      "cacheVariables": {
+        "IGASSET_BUILD_GEN_TOOLS": "OFF"
+      }
+    },
+
+    {
       "name": "windows-clang-cl-debug",
       "displayName": "Windows clang-cl Debug",
       "description": "Recommended Windows dev preset. Must be configured from a VS Developer PowerShell so INCLUDE/LIB and link.exe are on PATH.",
@@ -97,15 +110,46 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
+    },
+
+    {
+      "name": "emscripten-debug",
+      "inherits": "_emscripten",
+      "displayName": "Emscripten (Debug)",
+      "description": "(Requires EMSDK in env) Emscripten with -O0 -g and assertions",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+
+    {
+      "name": "emscripten-release",
+      "inherits": "_emscripten",
+      "displayName": "Emscripten (Release)",
+      "description": "(Requires EMSDK in env) Emscripten WASM build.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
 
   "buildPresets": [
-    { "name": "windows-clang-cl-debug",   "configurePreset": "windows-clang-cl-debug" },
-    { "name": "windows-clang-cl-release", "configurePreset": "windows-clang-cl-release" },
-    { "name": "windows-msvc-debug",       "configurePreset": "windows-msvc-debug" },
-    { "name": "windows-msvc-release",     "configurePreset": "windows-msvc-release" },
-    { "name": "linux-clang-debug",        "configurePreset": "linux-clang-debug" },
-    { "name": "linux-clang-release",      "configurePreset": "linux-clang-release" }
+    {
+      "name": "windows-clang-cl-debug",
+      "configurePreset": "windows-clang-cl-debug"
+    },
+    {
+      "name": "windows-clang-cl-release",
+      "configurePreset": "windows-clang-cl-release"
+    },
+    { "name": "windows-msvc-debug", "configurePreset": "windows-msvc-debug" },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release"
+    },
+    { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
+    { "name": "emscripten-debug", "configurePreset": "emscripten-debug" },
+    { "name": "emscripten-release", "configurePreset": "emscripten-release" }
   ]
 }

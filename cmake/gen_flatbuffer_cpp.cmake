@@ -5,7 +5,17 @@ function (gen_flatbuffer_cpp)
   cmake_parse_arguments(GFC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   if (NOT TARGET flatc)
-    message(FATAL_ERROR "flatc binary not available - this is probably because a tools build was not done on WASM")
+    if (EMSCRIPTEN)
+      message(FATAL_ERROR
+            "flatc binary not available on WASM build. The flatc binary is"
+            "intentionally not included in the build since flatc itself isn't WASM-friendly."
+            "If using the presets, run a one of the native builds (windows-clang-cl-debug or"
+            "any of the other non-emscripten platform builds). Otherwise, run a build with"
+            "IGASSET_TOOL_WRANGLE_PATH=[[location]], and re-configure this emscripten build with"
+            "IGASSET_TOOL_WRANGLE_PATH=[[same location]].")
+    else ()
+      message(FATAL_ERROR "flatc binary not available - cannot build flatbuffers.")
+    endif ()
   endif ()
 
   get_filename_component(generated_file_name ${GFC_SCHEMA_FILE} NAME_WE)

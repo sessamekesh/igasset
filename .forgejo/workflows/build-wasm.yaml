@@ -1,0 +1,37 @@
+name: Build WASM Library
+
+on: [push, pull_request]
+
+jobs:
+  wasm-build:
+    runs-on: docker
+    container: git.indigocode.dev/sessamekesh/emsdk-clang-box:0.5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore dependency build cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            build/linux-clang-release/_deps
+            build/emscripten-release/_deps
+          key: wasm-deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'extern/CMakeLists.txt') }}
+          restore-keys: |
+            wasm-deps-${{ runner.os }}-
+
+      # flatc cannot (and should not) be built under Emscripten, so build it
+      # natively first. Configuring the native preset runs export_build_tools.cmake,
+      # which writes build/linux-clang-release/wrangle-tools.cmake; the Emscripten
+      # build below auto-discovers flatc from that native preset's build dir.
+      - name: Configure native (Linux clang) for flatc
+        run: cmake --preset linux-clang-release
+
+      - name: Build flatc
+        run: cmake --build --preset linux-clang-release --target flatc
+
+      - name: Configure Emscripten (release)
+        run: cmake --preset emscripten-release
+
+      - name: Build igasset WASM library
+        run: cmake --build --preset emscripten-release --target igasset

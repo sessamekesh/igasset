@@ -11,10 +11,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore dependency build cache
+        id: deps-cache
         uses: actions/cache@v3
         with:
           path: build/_deps
-          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'extern/CMakeLists.txt') }}
+          key: deps-${{ runner.os }}-${{ hashFiles('extern/CMakeLists.txt') }}
           restore-keys: |
             deps-${{ runner.os }}-
 
@@ -26,6 +27,7 @@ jobs:
           -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
           -DIGASYNC_BUILD_TESTS=OFF
           -DIGASYNC_BUILD_EXAMPLES=OFF
+          ${{ steps.deps-cache.outputs.cache-hit == 'true' && '-DFETCHCONTENT_FULLY_DISCONNECTED=ON' || '-DFETCHCONTENT_UPDATES_DISCONNECTED=ON' }}
 
       - name: Build
         run: >

@@ -11,12 +11,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore dependency build cache
+        id: deps-cache
         uses: actions/cache@v3
         with:
           path: |
             build/linux-clang-release/_deps
+            build/linux-clang-release/wrangle-tools.cmake
             build/emscripten-release/_deps
-          key: wasm-deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'extern/CMakeLists.txt') }}
+          key: wasm-deps-${{ runner.os }}-${{ hashFiles('extern/CMakeLists.txt', 'cmake/import_build_tools.cmake') }}
           restore-keys: |
             wasm-deps-${{ runner.os }}-
 
@@ -24,14 +26,21 @@ jobs:
       # natively first. Configuring the native preset runs export_build_tools.cmake,
       # which writes build/linux-clang-release/wrangle-tools.cmake; the Emscripten
       # build below auto-discovers flatc from that native preset's build dir.
+      #
+      # On an exact cache hit both wrangle-tools.cmake and the flatc binary inside
+      # _deps/flatbuffers-build/ are restored, so these two steps can be skipped.
+      # On a partial hit (restore-keys match) the native steps still run to ensure
+      # wrangle-tools.cmake and the binary are coherent with the current sources.
       - name: Configure native (Linux clang) for flatc
-        run: cmake --preset linux-clang-release
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: cmake --preset linux-clang-release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
 
       - name: Build flatc
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: cmake --build --preset linux-clang-release --target flatc
 
       - name: Configure Emscripten (release)
-        run: cmake --preset emscripten-release
+        run: cmake --preset emscripten-release ${{ steps.deps-cache.outputs.cache-hit == 'true' && '-DFETCHCONTENT_FULLY_DISCONNECTED=ON' || '-DFETCHCONTENT_UPDATES_DISCONNECTED=ON' }}
 
       - name: Build igasset WASM library
         run: cmake --build --preset emscripten-release --target igasset

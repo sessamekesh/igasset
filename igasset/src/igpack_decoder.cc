@@ -8,6 +8,7 @@
 #include <igasset/wgsl_source.h>
 #include <spdlog/spdlog.h>
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -29,6 +30,15 @@ constexpr flatbuffers::Verifier::Options get_opts() {
   return opts;
 }
 
+// NOTICE - this logger will grab and clone the logger when first called, and
+//  not respect updates to the default logger. For now this is fine, but may not
+//  be expected for all users. I don't feel terribly strongly about this,
+//  considering this method only ever gets called in error cases.
+auto logger() {
+  static auto log = spdlog::default_logger()->clone("IgpackDecoder");
+  return log;
+}
+
 }  // namespace
 
 namespace igasset {
@@ -38,7 +48,7 @@ std::optional<std::shared_ptr<IgpackDecoder>> IgpackDecoder::Create(
   const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data.data());
   auto verifier = flatbuffers::Verifier(data_ptr, data.size(), ::get_opts());
   if (!IgAsset::VerifyAssetPackBuffer(verifier)) {
-    SPDLOG_ERROR("Asset pack failed flatbuffer verification");
+    ::logger()->error("Asset pack failed flatbuffer verification");
     return std::nullopt;
   }
 
@@ -106,8 +116,7 @@ IgpackDecoder::extract_draco_decoder(const std::string& asset_name) const {
         draco_asset->texcoord_attrib(), draco_asset->bone_idx_attrib(),
         draco_asset->bone_weight_attrib());
     if (std::holds_alternative<igasset::DracoDecoderError>(decode_rsl)) {
-      auto log = spdlog::default_logger()->clone("IgpackDecoder");
-      log->error(
+      ::logger()->error(
           "Draco decoding failure for {}: {} - {}", asset_name,
           igasset::to_string(
               std::get<igasset::DracoDecoderError>(decode_rsl).error_type),
@@ -134,9 +143,9 @@ std::variant<Image2D, IgpackExtractError> IgpackDecoder::extract_image2d(
 
     auto image = Image2D::Unpack(asset->data_as_Image2D(), format);
     if (!image.has_value()) {
-      auto log = spdlog::default_logger()->clone("IgpackDecoder");
-      log->error("Image2D asset {} failed to unpack - invalid format or data",
-                 asset_name);
+      ::logger()->error(
+          "Image2D asset {} failed to unpack - invalid format or data",
+          asset_name);
       return IgpackExtractError::AssetExtractError;
     }
 
@@ -162,8 +171,7 @@ IgpackDecoder::extract_spritesheet(const std::string& asset_name,
         Spritesheet::Unpack(asset->data_as_Spritesheet(), format);
 
     if (!spritesheet.has_value()) {
-      auto log = spdlog::default_logger()->clone("IgpackDecoder");
-      log->error(
+      ::logger()->error(
           "Spritesheet asset {} failed to unpack - invalid format or data",
           asset_name);
       return IgpackExtractError::AssetExtractError;
@@ -172,7 +180,7 @@ IgpackDecoder::extract_spritesheet(const std::string& asset_name,
     return *std::move(spritesheet);
   }
 
-  return IgpackExtractError::AssetExtractError;
+  return IgpackExtractError::ResourceNotFound;
 }
 
 }  // namespace igasset

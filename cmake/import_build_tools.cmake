@@ -119,10 +119,19 @@ if (EMSCRIPTEN)
     set(_igasset_flatc_binary
       "${_igasset_flatc_prefix}/build/flatc${_igasset_host_exe_suffix}")
 
+    # STAMP_DIR (and DOWNLOAD_DIR) must live outside SOURCE_DIR. ExternalProject's
+    # git-clone step runs `cmake -E rm -rf <SOURCE_DIR>` before cloning; CMake's
+    # default stamp path is <prefix>/src/<name>-stamp, which sits inside
+    # SOURCE_DIR when we set SOURCE_DIR to <prefix>/src. The wipe deletes the
+    # stamp files, the clone succeeds, then copying gitinfo -> gitclone-lastrun
+    # fails with "No such file or directory" (seen on Windows CI/dev).
     ExternalProject_Add(flatc_external
       GIT_REPOSITORY "https://github.com/google/flatbuffers"
       GIT_TAG "${_igasset_flatc_git_tag}"
       PREFIX "${_igasset_flatc_prefix}"
+      TMP_DIR "${_igasset_flatc_prefix}/tmp"
+      STAMP_DIR "${_igasset_flatc_prefix}/stamp"
+      DOWNLOAD_DIR "${_igasset_flatc_prefix}/download"
       SOURCE_DIR "${_igasset_flatc_prefix}/src"
       BINARY_DIR "${_igasset_flatc_prefix}/build"
       CMAKE_ARGS

@@ -35,7 +35,7 @@ endif ()
 
 #
 # Draco (compressed format for 3D geometry data)
-if (NOT TARGET draco)
+if (NOT TARGET draco_lib)
   set(DRACO_JS_GLUE OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(
       draco
@@ -43,10 +43,16 @@ if (NOT TARGET draco)
       GIT_TAG "1.5.7"
   )
   FetchContent_MakeAvailable(draco)
-  if (MSVC)
-    add_library(draco_lib ALIAS draco)
-  else ()
+  if (TARGET draco_static)
     add_library(draco_lib ALIAS draco_static)
+  elseif (TARGET draco)
+    add_library(draco_lib ALIAS draco)
+  elseif (TARGET draco_shared)
+    add_library(draco_lib ALIAS draco_shared)
+  else ()
+    message(FATAL_ERROR
+      "draco FetchContent finished but no linkable draco target was produced "
+      "(expected draco_static, draco, or draco_shared).")
   endif ()
 endif ()
 

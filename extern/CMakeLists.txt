@@ -40,7 +40,7 @@ if (NOT TARGET draco_lib)
   FetchContent_Declare(
       draco
       GIT_REPOSITORY "https://github.com/google/draco"
-      GIT_TAG "1.5.7"
+      GIT_TAG "8c1f17b638827238be21b6390bba49dfdaaeb927"
   )
   FetchContent_MakeAvailable(draco)
   if (TARGET draco_static)

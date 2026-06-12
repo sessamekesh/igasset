@@ -17,12 +17,14 @@ gen_flatbuffer_cpp(
 
 set(igasset_headers
   "include/igasset/generators/plane.h"
+  "include/igasset/asset_metadata.h"
   "include/igasset/draco_dec.h"
   "include/igasset/fb_utils.h"
   "include/igasset/igpack_decoder.h"
   "include/igasset/image2d.h"
   "include/igasset/spritesheet.h"
   "include/igasset/index_buffer.h"
+  "include/igasset/single_asset_parser.h"
   "include/igasset/vertex_types.h"
   "include/igasset/wgsl_source.h")
 
@@ -32,8 +34,9 @@ set(igasset_sources
   "src/fb_utils.cc"
   "src/igpack_decoder.cc"
   "src/image2d.cc"
-  "src/spritesheet.cc"
   "src/index_buffer.cc"
+  "src/single_asset_parser.cc"
+  "src/spritesheet.cc"
   "src/wgsl_source.cc")
 
 if (IGASSET_BUILD_IGASSET_DECODER)

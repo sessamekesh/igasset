@@ -5,7 +5,6 @@
 #include <igasset/index_buffer.h>
 #include <igasset/vertex_types.h>
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <variant>

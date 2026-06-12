@@ -1,13 +1,16 @@
 #ifndef IGASSET_IGPACK_DECODER_H
 #define IGASSET_IGPACK_DECODER_H
 
+#include <igasset/asset_metadata.h>
 #include <igasset/draco_dec.h>
 #include <igasset/image2d.h>
+#include <igasset/index_buffer.h>
 #include <igasset/schema/igasset.h>
 #include <igasset/schema/igpack.h>
 #include <igasset/spritesheet.h>
 #include <igasset/wgsl_source.h>
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -58,6 +61,8 @@ class IgpackDecoder {
     return *this;
   }
   ~IgpackDecoder() = default;
+
+  std::map<std::string, AssetMetadata> get_asset_metadata() const;
 
   //
   // WGSL Shaders

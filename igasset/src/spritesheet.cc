@@ -1,6 +1,6 @@
 #include <igasset/image2d.h>
 #include <igasset/spritesheet.h>
-#include "spdlog/spdlog-inl.h"
+#include <spdlog/spdlog.h>
 
 namespace igasset {
 

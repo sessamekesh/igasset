@@ -8,8 +8,7 @@
 #include <igasset/single_asset_parser.h>
 #include <igasset/spritesheet.h>
 #include <igasset/wgsl_source.h>
-#include <spdlog/spdlog-inl.h>
-#include <cstddef>
+#include <spdlog/spdlog.h>
 #include <utility>
 #include <variant>
 

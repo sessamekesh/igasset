@@ -2,8 +2,8 @@
 pytest configuration for the igpack-bundle integration test suite.
 
 Binary paths are resolved via CLI options (highest priority) or environment
-variables (fallback). The asset root and schema files are auto-detected
-from the repository layout but can be overridden the same way.
+variables (fallback). The asset root is auto-detected from the repository
+layout but can be overridden the same way.
 
 Usage examples
 --------------
@@ -53,22 +53,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     help=(
       "Root directory containing raw test assets (overrides "
       "IGASSET_TEST_ASSET_ROOT env var). Defaults to <repo>/test_assets."
-    ),
-  )
-  parser.addoption(
-    "--igasset-gen-plan-schema",
-    default=None,
-    help=(
-      "Path to igasset-gen-plan.fbs (overrides IGASSET_GEN_PLAN_SCHEMA env var). "
-      "Defaults to <repo>/schema/igasset-gen-plan.fbs"
-    ),
-  )
-  parser.addoption(
-    "--igpack-bundle-plan-schema",
-    default=None,
-    help=(
-      "Path to igpack-bundle-plan.fbs (overrides IGPACK_BUNDLE_PLAN_SCHEMA env var). "
-      "Defaults to <repo>/schema/igpack-bundle-plan.fbs"
     ),
   )
   parser.addoption(
@@ -149,28 +133,6 @@ def asset_root(request: pytest.FixtureRequest) -> Path:
   )
 
 @pytest.fixture(scope="session")
-def igasset_gen_schema_path(request: pytest.FixtureRequest) -> Path:
-  """Absolute path to igasset-gen-plan.fbs (passed as -s to igasset-gen)."""
-  return _resolve_path(
-    request,
-    cli_opt="igasset-gen-plan-schema",
-    env_var="IGASSET_GEN_PLAN_SCHEMA",
-    default=_REPO_ROOT / "schema" / "igasset-gen-plan.fbs",
-    description="igasset-gen-plan.fbs schema file",
-  )
-
-@pytest.fixture(scope="session")
-def igpack_bundle_schema_path(request: pytest.FixtureRequest) -> Path:
-  """Absolute path to igpack-bundle-plan.fbs (passed as -s to igpack-bundle)."""
-  return _resolve_path(
-    request,
-    cli_opt="igpack-bundle-plan-schema",
-    env_var="IGPACK_BUNDLE_PLAN_SCHEMA",
-    default=_REPO_ROOT / "schema" / "igpack-bundle-plan.fbs",
-    description="igpack-bundle-plan.fbs schema file",
-  )
-
-@pytest.fixture(scope="session")
 def test_definitions_dir() -> Path:
   """Directory containing the .igasset-gen.json / .igpack-bundle.json plan files shipped with the tests."""
   p = _E2E_DIR / "test-definitions"
@@ -182,7 +144,6 @@ def test_definitions_dir() -> Path:
 def prep_igassets_dir(
   igasset_gen_bin: Path,
   asset_root: Path,
-  igasset_gen_schema_path: Path,
   test_definitions_dir: Path,
   tmp_path_factory: pytest.TempPathFactory,
 ) -> Path:
@@ -203,7 +164,6 @@ def prep_igassets_dir(
     plan_json=plan,
     asset_root=asset_root,
     output_dir=out,
-    schema=igasset_gen_schema_path,
   )
   if proc.returncode != 0:
     pytest.fail(

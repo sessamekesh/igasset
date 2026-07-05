@@ -10,11 +10,13 @@ gen_flatbuffer_cpp(
   SCHEMA_TARGETS toolutils_types_schema)
 
 set(tool-utils-headers
+  "include/tool-utils/embedded-schema.h"
   "include/tool-utils/filesystem.h"
   "include/tool-utils/log-level.h"
   "include/tool-utils/runtime-timer.h")
 
 set(tool-utils-sources
+  "src/embedded-schema.cc"
   "src/filesystem.cc"
   "src/log-level.cc"
   "src/runtime-timer.cc")

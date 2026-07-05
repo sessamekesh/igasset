@@ -46,7 +46,6 @@ _EXPECTED_SOURCE_HASH: Optional[str] = None
 @pytest.fixture(scope="module")
 def gen_result(
     igasset_gen_bin: Path,
-    schema_path: Path,
     asset_root: Path,
     test_definitions_dir: Path,
     tmp_path_factory: pytest.TempPathFactory,
@@ -64,7 +63,6 @@ def gen_result(
         plan_json=plan,
         asset_root=asset_root,
         output_dir=output_dir,
-        schema=schema_path,
     )
     return proc.returncode, output_dir
 

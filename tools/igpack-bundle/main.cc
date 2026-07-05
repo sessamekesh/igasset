@@ -5,6 +5,7 @@
 #include <igasset/schema/igpack.h>
 #include <igasset/schema/types.h>
 #include <spdlog/logger.h>
+#include <tool-utils/embedded-schema.h>
 #include <tool-utils/filesystem.h>
 #include <tool-utils/log-level.h>
 #include <tool-utils/runtime-timer.h>
@@ -12,6 +13,7 @@
 #include <flatbuffers/idl.h>
 #include <igpack-bundle/exec-config.h>
 #include <igpack-bundle/schema/igpack-bundle-plan.h>
+#include <igpack-bundle/schema/igpack-bundle-plan-embedded.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <CLI/CLI.hpp>
@@ -234,8 +236,8 @@ int main(int argc, char** argv) {
   app.add_option("-i,--input_igasset_path_root", input_igasset_path_root,
                  "Root directory for resolving input igasset file paths")
       ->required(false)
-      ->default_str(std::filesystem::current_path().string())
-      ->check(CLI::ExistingDirectory);
+      ->check(CLI::ExistingDirectory)
+      ->default_val(std::filesystem::current_path().string());
 
   //
   // Output path root (for generated *.igpack files)
@@ -243,7 +245,7 @@ int main(int argc, char** argv) {
   app.add_option("-o,--output_path_root", igpack_path_root,
                  "Root directory used when saving generated *.igasset files")
       ->required(false)
-      ->default_str(std::filesystem::current_path().string());
+      ->default_val(std::filesystem::current_path().string());
 
   //
   // Input plan file path (JSON formatted)
@@ -253,20 +255,6 @@ int main(int argc, char** argv) {
          "Path of the Indigo asset bundle plan file (*.igpack-plan.json) "
          "that should be processed by this tool")
       ->required(true)
-      ->check(CLI::ExistingFile);
-
-  //
-  // igpack-bundle-plan.fbs schema location
-  // (assumed to be in same directory as binary if not specified)
-  std::string schema_path;
-  app.add_option(
-         "-s,--schema", schema_path,
-         "Path of the schema file igpack-bundle-plan.fbs that defines how the "
-         "JSON parser should read in igasset-gen-plan files. Assumed to be in "
-         "PATH by default, set this value to give a specific location.")
-      ->required(false)
-      ->default_str(
-          (std::filesystem::current_path() / "igpack-bundle-plan.fbs").string())
       ->check(CLI::ExistingFile);
 
   //
@@ -323,44 +311,10 @@ int main(int argc, char** argv) {
   //
   // Read plan...
   flatbuffers::Parser parser;
-  {
-    // Copied per CMake file instruction - must be in the same directory as
-    // binary
-    if (schema_path.empty()) {
-      schema_path = "igpack-bundle-plan.fbs";
-    }
-
-    std::filesystem::path const schema_file_path =
-        std::filesystem::absolute(schema_path);
-    std::filesystem::path const schema_include_root =
-        schema_file_path.parent_path();
-    std::string const schema_include_root_posix =
-        schema_include_root.generic_string();
-    std::string const schema_file_posix = schema_file_path.generic_string();
-
-    std::ifstream fin(schema_file_path);
-    if (!fin) {
-      log->error("Failed to read igpack-bundle-plan.fbs schema file");
-      return EXIT_FAILURE;
-    }
-
-    fin.seekg(0, std::ios::end);
-    std::string schema_text(fin.tellg(), '\0');
-    fin.seekg(0, std::ios::beg);
-    schema_text.assign(std::istreambuf_iterator<char>(fin),
-                       std::istreambuf_iterator<char>());
-
-    // Resolves include "types.fbs" / include "igasset.fbs" (same directory as
-    // igasset-gen-plan.fbs). Paths must use POSIX separators per FlatBuffers.
-    const char* schema_include_paths[] = {schema_include_root_posix.c_str(),
-                                          nullptr};
-
-    if (!parser.Parse(schema_text.c_str(), schema_include_paths,
-                      schema_file_posix.c_str())) {
-      log->error("Failed to parse igpack-bundle-plan.fbs schema file: {}",
-                 parser.error_);
-      return EXIT_FAILURE;
-    }
+  if (!toolutils::ParseEmbeddedSchema(
+          parser, log, igpackbundle::embedded_schema::kRootSchemaFilename,
+          igpackbundle::embedded_schema::kEmbeddedSchemaFiles)) {
+    return EXIT_FAILURE;
   }
 
   {

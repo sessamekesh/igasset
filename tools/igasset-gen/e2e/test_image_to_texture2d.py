@@ -57,7 +57,6 @@ class _EncodingConfig:
 def _make_gen_result(
     cfg: _EncodingConfig,
     igasset_gen_bin: Path,
-    schema_path: Path,
     asset_root: Path,
     test_definitions_dir: Path,
     tmp_path_factory: pytest.TempPathFactory,
@@ -77,7 +76,6 @@ def _make_gen_result(
         plan_json=plan,
         asset_root=asset_root,
         output_dir=output_dir,
-        schema=schema_path,
     )
     return proc.returncode, output_dir
 
@@ -117,7 +115,6 @@ class TestEtc1s:
     def gen_result(
         self,
         igasset_gen_bin: Path,
-        schema_path: Path,
         asset_root: Path,
         test_definitions_dir: Path,
         tmp_path_factory: pytest.TempPathFactory,
@@ -125,7 +122,6 @@ class TestEtc1s:
         return _make_gen_result(
             self._CFG,
             igasset_gen_bin,
-            schema_path,
             asset_root,
             test_definitions_dir,
             tmp_path_factory,

@@ -1,6 +1,7 @@
 #if IGASSET_ENABLE_BASISU_SUPPORT
 #include <encoder/basisu_enc.h>
 #endif
+#include <tool-utils/embedded-schema.h>
 #include <tool-utils/filesystem.h>
 #include <tool-utils/log-level.h>
 #include <tool-utils/runtime-timer.h>
@@ -8,6 +9,7 @@
 #include <flatbuffers/idl.h>
 #include <igasset-gen/igasset-generator.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
+#include <igasset-gen/schema/igasset-gen-plan-embedded.h>
 #include <igasync/promise_combiner.h>
 #include <igasync/task_list.h>
 #include <igasync/thread_pool.h>
@@ -46,8 +48,8 @@ int main(int argc, char** argv) {
   app.add_option("-i,--input_asset_path_root", input_asset_path_root,
                  "Root directory for resolving input asset file paths")
       ->required(false)
-      ->default_str(std::filesystem::current_path().string())
-      ->check(CLI::ExistingDirectory);
+      ->check(CLI::ExistingDirectory)
+      ->default_val(std::filesystem::current_path().string());
 
   //
   // Output path root (for generated *.igasset files)
@@ -55,7 +57,7 @@ int main(int argc, char** argv) {
   app.add_option("-o,--output_path_root", igasset_path_root,
                  "Root directory used when saving generated *.igasset files")
       ->required(false)
-      ->default_str(std::filesystem::current_path().string());
+      ->default_val(std::filesystem::current_path().string());
 
   //
   // Input plan file path (JSON formatted)
@@ -65,19 +67,6 @@ int main(int argc, char** argv) {
          "Path of the Indigo asset pack plan file (*.igasset-plan.json) "
          "that should be processed by this tool")
       ->required(true)
-      ->check(CLI::ExistingFile);
-
-  //
-  // igasset-gen-plan.fbs schema location
-  std::string schema_path;
-  app.add_option(
-         "-s,--schema", schema_path,
-         "Path of the schema file igasset-gen-plan.fbs that defines how the "
-         "JSON parser should read in igasset-gen-plan files. Assumed to be in "
-         "PATH by default, set this value to give a specific location.")
-      ->required(false)
-      ->default_str(
-          (std::filesystem::current_path() / "igasset-gen-plan.fbs").string())
       ->check(CLI::ExistingFile);
 
   //
@@ -148,43 +137,10 @@ int main(int argc, char** argv) {
   //
   // Read plan...
   flatbuffers::Parser parser;
-  {
-    // Copied per CMake file instruction - must be in the same directory as
-    // binary
-    if (schema_path.empty()) {
-      schema_path = "igasset-gen-plan.fbs";
-    }
-
-    std::filesystem::path const schema_file_path =
-        std::filesystem::absolute(schema_path);
-    std::filesystem::path const schema_include_root =
-        schema_file_path.parent_path();
-    std::string const schema_include_root_posix =
-        schema_include_root.generic_string();
-    std::string const schema_file_posix = schema_file_path.generic_string();
-
-    std::ifstream fin(schema_file_path);
-    if (!fin) {
-      log->error("Failed to read igasset-gen-plan.fbs schema file");
-      return EXIT_FAILURE;
-    }
-
-    fin.seekg(0, std::ios::end);
-    std::string schema_text(fin.tellg(), '\0');
-    fin.seekg(0, std::ios::beg);
-    schema_text.assign(std::istreambuf_iterator<char>(fin),
-                       std::istreambuf_iterator<char>());
-
-    // Resolves include "types.fbs" / include "igasset.fbs" (same directory as
-    // igasset-gen-plan.fbs). Paths must use POSIX separators per FlatBuffers.
-    const char* schema_include_paths[] = {schema_include_root_posix.c_str(),
-                                          nullptr};
-    if (!parser.Parse(schema_text.c_str(), schema_include_paths,
-                      schema_file_posix.c_str())) {
-      log->error("Failed to parse igasset-gen-plan.fbs schema file: {}",
-                 parser.error_);
-      return EXIT_FAILURE;
-    }
+  if (!toolutils::ParseEmbeddedSchema(
+          parser, log, igassetgen::embedded_schema::kRootSchemaFilename,
+          igassetgen::embedded_schema::kEmbeddedSchemaFiles)) {
+    return EXIT_FAILURE;
   }
 
   {

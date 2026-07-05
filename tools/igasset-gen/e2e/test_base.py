@@ -80,7 +80,6 @@ def run_igasset_gen(
     plan_json: Path,
     asset_root: Path,
     output_dir: Path,
-    schema: Path,
     *,
     single_threaded: bool = True,
     extra_args: list[str] | None = None,
@@ -97,7 +96,6 @@ def run_igasset_gen(
     plan_json:        Path to the *.igasset-gen.json plan file (positional).
     asset_root:       Directory used to resolve relative input_file_path values (-w).
     output_dir:       Directory where .igasset files are written (-o).
-    schema:           Path to igasset-gen-plan.fbs (-s).
     single_threaded:  Pass --single-threaded to keep test output deterministic.
     extra_args:       Any additional CLI arguments to append.
     """
@@ -105,7 +103,6 @@ def run_igasset_gen(
         str(bin_path),
         "-i", str(asset_root),
         "-o", str(output_dir),
-        "-s", str(schema),
     ]
     if single_threaded:
         cmd.append("--single-threaded")

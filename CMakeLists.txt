@@ -23,6 +23,7 @@ include(cmake/import_build_tools.cmake)
 
 add_subdirectory(extern)
 include(cmake/gen_flatbuffer_cpp.cmake)
+include(cmake/embed_fbs_schema.cmake)
 
 add_subdirectory(igasset)
 add_subdirectory(utils)

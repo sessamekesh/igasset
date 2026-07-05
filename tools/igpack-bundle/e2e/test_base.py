@@ -82,7 +82,6 @@ def run_igasset_gen(
     plan_json: Path,
     asset_root: Path,
     output_dir: Path,
-    schema: Path,
     *,
     single_threaded: bool = True,
     extra_args: list[str] | None = None,
@@ -99,7 +98,6 @@ def run_igasset_gen(
     plan_json:        Path to the *.igasset-gen.json plan file (positional).
     asset_root:       Directory used to resolve relative input_file_path values (-w).
     output_dir:       Directory where .igasset files are written (-o).
-    schema:           Path to igasset-gen-plan.fbs (-s).
     single_threaded:  Pass --single-threaded to keep test output deterministic.
     extra_args:       Any additional CLI arguments to append.
     """
@@ -107,7 +105,6 @@ def run_igasset_gen(
         str(bin_path),
         "-i", str(asset_root),
         "-o", str(output_dir),
-        "-s", str(schema),
     ]
     if single_threaded:
         cmd.append("--single-threaded")
@@ -129,7 +126,6 @@ def run_igpack_bundle(
     plan_json: Path,
     asset_root: Path,
     output_dir: Path,
-    schema: Path,
     *,
     clean_build: bool = False,
     extra_args: list[str] | None = None,
@@ -143,14 +139,12 @@ def run_igpack_bundle(
     plan_json:        Path to the *.igpack-bundle.json plan file (positional).
     asset_root:       Directory used to resolve relative input_file_path values (-i).
     output_dir:       Directory where .igpack files are written (-o).
-    schema:           Path to igpack-bundle-plan.fbs (-s).
     extra_args:       Any additional CLI arguments to append.
     """
     cmd: list[str] = [
         str(bin_path),
         "-i", str(asset_root),
         "-o", str(output_dir),
-        "-s", str(schema),
     ]
 
     if clean_build:

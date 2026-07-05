@@ -2,8 +2,8 @@
 pytest configuration for the igasset-gen integration test suite.
 
 Binary paths are resolved via CLI options (highest priority) or environment
-variables (fallback).  The asset root and schema file are auto-detected from
-the repository layout but can be overridden the same way.
+variables (fallback).  The asset root is auto-detected from the repository
+layout but can be overridden the same way.
 
 Usage examples
 --------------
@@ -55,15 +55,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "IGASSET_TEST_ASSET_ROOT env var). Defaults to <repo>/test_assets."
         ),
     )
-    parser.addoption(
-        "--schema",
-        default=None,
-        help=(
-            "Path to igasset-gen-plan.fbs (overrides IGASSET_SCHEMA env var). "
-            "Defaults to <repo>/schema/igasset-gen-plan.fbs."
-        ),
-    )
-
 
 # ---------------------------------------------------------------------------
 # Session-scoped fixtures
@@ -127,18 +118,6 @@ def asset_root(request: pytest.FixtureRequest) -> Path:
         env_var="IGASSET_TEST_ASSET_ROOT",
         default=_REPO_ROOT / "test_assets",
         description="test asset root directory",
-    )
-
-
-@pytest.fixture(scope="session")
-def schema_path(request: pytest.FixtureRequest) -> Path:
-    """Absolute path to igasset-gen-plan.fbs (passed as -s to igasset-gen)."""
-    return _resolve_path(
-        request,
-        cli_opt="schema",
-        env_var="IGASSET_SCHEMA",
-        default=_REPO_ROOT / "schema" / "igasset-gen-plan.fbs",
-        description="igasset-gen-plan.fbs schema file",
     )
 
 

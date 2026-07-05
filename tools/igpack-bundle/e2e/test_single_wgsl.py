@@ -59,7 +59,6 @@ _PACK_SIZE_UPPER_BOUND = 1024
 @pytest.fixture(scope="module")
 def bundle_result(
     igpack_bundle_bin: Path,
-    igpack_bundle_schema_path: Path,
     prep_igassets_dir: Path,
     test_definitions_dir: Path,
     tmp_path_factory: pytest.TempPathFactory,
@@ -72,7 +71,6 @@ def bundle_result(
         plan_json=plan,
         asset_root=prep_igassets_dir,
         output_dir=output_dir,
-        schema=igpack_bundle_schema_path,
         clean_build=True,
     )
     return proc.returncode, output_dir, proc.stdout, proc.stderr

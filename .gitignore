@@ -6,3 +6,4 @@ build
 CMakeUserPresets.json
 .cache
 .venv
+.claude

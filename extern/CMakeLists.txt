@@ -28,7 +28,7 @@ if (NOT TARGET igasync)
   FetchContent_Declare(
     igasync
     GIT_REPOSITORY "https://git.indigocode.dev/sessamekesh/igasync"
-    GIT_TAG "70718c036ae7670e4db3724ec61c6652e9b9b62b"
+    GIT_TAG "0.2.1"
   )
   FetchContent_MakeAvailable(igasync)
 endif ()

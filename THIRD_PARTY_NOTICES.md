@@ -26,7 +26,7 @@ Apache 2.0 requires preserving license text and required attribution notices.
 
 ### igasync
 
-- Source: <https://git.indigocode.dev/sessamekesh/igasync>
+- Source: <https://git.indigocode.dev/indigocode/igasync>
 - Pinned revision: `70718c036ae7670e4db3724ec61c6652e9b9b62b`
 - License: MIT
 

@@ -27,7 +27,7 @@ if (NOT TARGET igasync)
   set(IGASYNC_BUILD_TESTS "OFF" CACHE BOOL "Build unit tests")
   FetchContent_Declare(
     igasync
-    GIT_REPOSITORY "https://git.indigocode.dev/sessamekesh/igasync"
+    GIT_REPOSITORY "https://git.indigocode.dev/indigocode/igasync"
     GIT_TAG "0.2.1"
   )
   FetchContent_MakeAvailable(igasync)

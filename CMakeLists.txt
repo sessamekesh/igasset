@@ -4,7 +4,7 @@ project(
   IgAsset
   VERSION 0.1.0
   DESCRIPTION "IgAsset is a game asset bundle format and decoder optimized for the web"
-  HOMEPAGE_URL "https://git.indigocode.dev/sessamekesh/igasset"
+  HOMEPAGE_URL "https://git.indigocode.dev/indigocode/igasset"
   LANGUAGES C CXX)
 
 #

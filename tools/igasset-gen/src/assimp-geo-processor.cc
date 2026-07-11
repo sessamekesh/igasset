@@ -274,7 +274,7 @@ AssimpGeoProcessor::draco_asset_from_assimp(
   return io_task_list_
       ->run([filesystem = filesystem_, config = config_, log = log_,
              input_file_path,
-             action]() -> std::variant<std::string, LoadAssimpFileAltResult> {
+             action]() -> std::optional<LoadAssimpFileAltResult> {
         std::vector<std::filesystem::path> input_paths;
         input_paths.push_back(input_file_path);
         std::filesystem::path output_file_path =
@@ -288,31 +288,24 @@ AssimpGeoProcessor::draco_asset_from_assimp(
         if (!rsl.has_value()) {
           return LoadAssimpFileAltResult::FsErr;
         }
-        return *rsl;
+        if (rsl->empty()) {
+          return LoadAssimpFileAltResult::EmptyBin;
+        }
+        return std::nullopt;
       })
       ->then_consuming(
           [action, input_file_path,
-           log = log_](std::variant<std::string, LoadAssimpFileAltResult>
-                           assimp_source_var)
+           log = log_](std::optional<LoadAssimpFileAltResult> check_result)
               -> std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
                               LoadAssimpFileAltResult> {
             //
             // ASSIMP parsing...
-            if (std::holds_alternative<LoadAssimpFileAltResult>(
-                    assimp_source_var)) {
-              return std::get<LoadAssimpFileAltResult>(assimp_source_var);
+            if (check_result.has_value()) {
+              return *check_result;
             }
 
-            std::string assimp_bin = std::get<std::string>(assimp_source_var);
-            if (assimp_bin == "") {
-              log->error("Empty geometry file binary, aborting");
-              return LoadAssimpFileAltResult::EmptyBin;
-            }
-
-            auto file_extension = input_file_path.extension().string();
-            auto assimp_scene =
-                load_scene(file_extension, assimp_bin,
-                           action->output_file_path()->str(), log);
+            auto assimp_scene = load_scene(
+                input_file_path, action->output_file_path()->str(), log);
             if (assimp_scene == nullptr) {
               log->error("Could not load scene for {}",
                          action->output_file_path()->str());
@@ -648,26 +641,42 @@ AssimpGeoProcessor::draco_asset_from_assimp(
 #endif
 
             draco::Encoder encoder;
-            int encoding_speed = std::min(
-                10,
-                std::max(0, 10 - action->draco_params()->compression_level()));
-            int decoding_speed = std::min(
-                10, std::max(
-                        0, 10 - action->draco_params()->decompression_level()));
+            // draco_params is optional in the FlatBuffers schema; use defaults
+            // matching DracoCompressionParams in igasset-gen-plan.fbs when
+            // null.
+            uint8_t compression_level = 10;
+            uint8_t decompression_level = 10;
+            uint8_t general_quantization = 11;
+            uint8_t pos_quantization = 11;
+            uint8_t normal_quantization = 11;
+            uint8_t texcoord_quantization = 11;
+            if (action->draco_params() != nullptr) {
+              compression_level = action->draco_params()->compression_level();
+              decompression_level =
+                  action->draco_params()->decompression_level();
+              general_quantization =
+                  action->draco_params()->general_quantization();
+              pos_quantization = action->draco_params()->pos_quantization();
+              normal_quantization =
+                  action->draco_params()->normal_quantization();
+              texcoord_quantization =
+                  action->draco_params()->texcoord_quantization();
+            }
+
+            int encoding_speed =
+                std::min(10, std::max(0, 10 - compression_level));
+            int decoding_speed =
+                std::min(10, std::max(0, 10 - decompression_level));
 
             encoder.SetSpeedOptions(encoding_speed, decoding_speed);
+            encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION,
+                                             pos_quantization);
             encoder.SetAttributeQuantization(
-                draco::GeometryAttribute::POSITION,
-                action->draco_params()->pos_quantization());
-            encoder.SetAttributeQuantization(
-                draco::GeometryAttribute::TEX_COORD,
-                action->draco_params()->texcoord_quantization());
-            encoder.SetAttributeQuantization(
-                draco::GeometryAttribute::GENERIC,
-                action->draco_params()->general_quantization());
-            encoder.SetAttributeQuantization(
-                draco::GeometryAttribute::NORMAL,
-                action->draco_params()->normal_quantization());
+                draco::GeometryAttribute::TEX_COORD, texcoord_quantization);
+            encoder.SetAttributeQuantization(draco::GeometryAttribute::GENERIC,
+                                             general_quantization);
+            encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL,
+                                             normal_quantization);
 
             draco::EncoderBuffer out_buffer;
             auto status = encoder.EncodeMeshToBuffer(draco_mesh, &out_buffer);

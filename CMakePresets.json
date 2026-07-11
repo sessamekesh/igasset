@@ -56,7 +56,7 @@
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_LINKER_TYPE": "MSVC",
+        "CMAKE_LINKER_TYPE": "LLD",
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },

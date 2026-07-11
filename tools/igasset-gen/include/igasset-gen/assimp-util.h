@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include <assimp/Importer.hpp>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -18,7 +19,7 @@ struct AssimpSceneData {
 };
 
 std::shared_ptr<AssimpSceneData> load_scene(
-    const std::string& file_extension, const std::string& file_data,
+    const std::filesystem::path& input_file_path,
     const std::string& igasset_name, std::shared_ptr<spdlog::logger> log);
 
 }  // namespace igassetgen

@@ -32,6 +32,9 @@
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_WITH_INSTALL_RPATH": "ON"
       }
     },
 

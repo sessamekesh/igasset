@@ -32,10 +32,13 @@ struct StbImageData {
   static std::optional<StbImageData> blank_rgba(int width, int height,
                                                 std::uint8_t default_color[4]);
   static std::optional<StbImageData> from_memory(const std::string& enc_img,
-                                                  int force_channels = 0);
+                                                 int force_channels = 0);
 
   StbImageData clone() const;
   std::optional<StbImageData> crop(int x, int y, int w, int h) const;
+
+  void premultiply_alpha();
+  void unpremultiply_alpha();
 
   std::optional<StbImageData> resized(uint16_t new_width,
                                       uint16_t new_height) const;

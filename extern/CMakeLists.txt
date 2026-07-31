@@ -28,7 +28,7 @@ if (NOT TARGET igasync)
   FetchContent_Declare(
     igasync
     GIT_REPOSITORY "https://git.indigocode.dev/indigocode/igasync"
-    GIT_TAG "0.2.1"
+    GIT_TAG "0.2.2"
   )
   FetchContent_MakeAvailable(igasync)
 endif ()

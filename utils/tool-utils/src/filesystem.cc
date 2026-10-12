@@ -1,7 +1,6 @@
 #include <tool-utils/filesystem.h>
 
 #include <flatbuffers/flatbuffer_builder.h>
-#include <igasync/promise.h>
 
 #include <filesystem>
 #include <fstream>
@@ -12,14 +11,6 @@
 #include <utility>
 
 namespace toolutils {
-
-std::shared_ptr<igasync::Promise<bool>> Filesystem::write_bin_async(
-    std::filesystem::path path,
-    std::shared_ptr<flatbuffers::FlatBufferBuilder> fbb) const {
-  return io_task_list_->run(
-      [fs = shared_from_this(), fbb = std::move(fbb),
-       path = std::move(path)]() -> bool { return fs->write_bin(path, *fbb); });
-}
 
 std::optional<std::string> Filesystem::read_bin(
     std::filesystem::path path) const {

@@ -97,11 +97,16 @@ if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
   endif ()
 
   if (NOT TARGET assimp)
-    set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "" FORCE)
+    # Security + binary size: only the importers needed for IgAsset generation
+    # are enabled (FBX, glTF 1 + 2, OBJ - the single "GLTF" importer module
+    # covers both glTF versions). To add a format, enable its importer here
+    # (see assimp's code/CMakeLists.txt ADD_ASSIMP_IMPORTER list).
+    set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
     set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -112,7 +117,7 @@ if (NOT EMSCRIPTEN AND IGASSET_BUILD_GEN_TOOLS)
     FetchContent_Declare(
         assimp
         GIT_REPOSITORY "https://github.com/assimp/assimp"
-        GIT_TAG "v6.0.4"
+        GIT_TAG "v6.0.5"
         PATCH_COMMAND ${CMAKE_COMMAND}
             "-DREVISION_H_IN=<SOURCE_DIR>/include/assimp/revision.h.in"
             -P "${_assimp_patch_script}"

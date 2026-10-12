@@ -22,12 +22,10 @@ class BasisuProcessor {
  public:
   BasisuProcessor(std::shared_ptr<spdlog::logger> log,
                   PlanInvocationConfig config,
-                  std::shared_ptr<igasync::TaskList> io_task_list,
                   std::shared_ptr<igasync::TaskList> exec_task_list,
                   std::shared_ptr<toolutils::Filesystem> filesystem)
       : log_(log->clone("BasisuProcessor")),
         config_(config),
-        io_task_list_(io_task_list),
         exec_task_list_(exec_task_list),
         filesystem_(filesystem) {}
 
@@ -55,8 +53,8 @@ class BasisuProcessor {
   using Image2DGenRsl = std::variant<flatbuffers::Offset<IgAsset::Image2D>,
                                      BasisuProcessor::AltResult>;
 
-  std::shared_ptr<igasync::Promise<bool>> generate_single_output(
-      const IgAssetGen::Output2DImage* output, const StbImageData& data) const;
+  bool generate_single_output(const IgAssetGen::Output2DImage* output,
+                              const StbImageData& data) const;
   Image2DGenRsl rgba8_unorm_out(
       const IgAssetGen::Output2DImage* output,
       std::shared_ptr<flatbuffers::FlatBufferBuilder> fbb,
@@ -69,7 +67,6 @@ class BasisuProcessor {
  private:
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
-  std::shared_ptr<igasync::TaskList> io_task_list_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
   std::shared_ptr<toolutils::Filesystem> filesystem_;
 };

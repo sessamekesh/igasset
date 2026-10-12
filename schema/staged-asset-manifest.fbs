@@ -1,0 +1,35 @@
+// Staged asset manifest.
+//
+// Provides an optional file name re-mapping layer that is useful for any
+//  applications that use igasset offline generation tools (`igasset-gen`,
+//  `enumerate-metadata` in particular) with untrusted and potentially
+//  malicious inputs.
+//
+// Example: someone uploads a glTF file that references a texture at
+//  `/usr/root/.ssh/id_ed25519` as a bitmap file to try to exfiltrate an
+//  SSH private key somehow.
+// 
+// This is also useful for tools that have their own filesystem/renaming,
+//  i.e. if a toolchain stores uploaded files as UUIDs but maintains their
+//  original file names as textual metadata.
+namespace IgAssetStaging;
+
+table StagedAssetManifestEntry {
+  // Logical path of this file - the name referenced by igasset-gen plans and
+  // by in-file references (an OBJ "mtllib" line, a glTF buffer uri, ...).
+  // Must be relative, with no ".." segments.
+  logical_path: string (required);
+
+  // Physical file to read. Must exist in the current working directory.
+  physical_path: string (required);
+
+  // Optional traceability identifier for the source object (e.g. the S3
+  // object UUID). Never used for file access.
+  s3_uuid: string;
+}
+
+table StagedAssetManifest {
+  entries: [StagedAssetManifestEntry];
+}
+
+root_type StagedAssetManifest;

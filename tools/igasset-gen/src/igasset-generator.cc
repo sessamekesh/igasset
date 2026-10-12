@@ -15,8 +15,8 @@ namespace igassetgen {
 
 WgslCopyProcessor& IgassetGenerator::wgsl_copy_processor() const {
   if (!wgsl_copy_processor_.has_value()) {
-    wgsl_copy_processor_.emplace(WgslCopyProcessor(
-        log_, config_, io_task_list_, exec_task_list_, filesystem_));
+    wgsl_copy_processor_.emplace(
+        WgslCopyProcessor(log_, config_, exec_task_list_, filesystem_));
   }
 
   return *wgsl_copy_processor_;
@@ -24,8 +24,8 @@ WgslCopyProcessor& IgassetGenerator::wgsl_copy_processor() const {
 
 AssimpGeoProcessor& IgassetGenerator::assimp_geo_processor() const {
   if (!assimp_geo_processor_.has_value()) {
-    assimp_geo_processor_.emplace(AssimpGeoProcessor(
-        log_, config_, io_task_list_, exec_task_list_, filesystem_));
+    assimp_geo_processor_.emplace(
+        AssimpGeoProcessor(log_, config_, exec_task_list_, filesystem_));
   }
 
   return *assimp_geo_processor_;
@@ -33,8 +33,8 @@ AssimpGeoProcessor& IgassetGenerator::assimp_geo_processor() const {
 
 BasisuProcessor& IgassetGenerator::basisu_processor() const {
   if (!basisu_processor_.has_value()) {
-    basisu_processor_.emplace(BasisuProcessor(log_, config_, io_task_list_,
-                                              exec_task_list_, filesystem_));
+    basisu_processor_.emplace(
+        BasisuProcessor(log_, config_, exec_task_list_, filesystem_));
   }
   return *basisu_processor_;
 }

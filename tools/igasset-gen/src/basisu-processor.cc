@@ -89,7 +89,7 @@ namespace igassetgen {
 //
 // SINGLE OUTPUT GENERATION ROOT
 //
-std::shared_ptr<igasync::Promise<bool>> BasisuProcessor::generate_single_output(
+bool BasisuProcessor::generate_single_output(
     const IgAssetGen::Output2DImage* output,
     const StbImageData& input_img) const {
   int out_width = output->width();
@@ -106,62 +106,50 @@ std::shared_ptr<igasync::Promise<bool>> BasisuProcessor::generate_single_output(
   if (!resized_img.has_value()) {
     log_->error("Failed to resize image for output {}",
                 output->output_file_path()->str());
-    return igasync::Promise<bool>::Immediate(false);
+    return false;
   }
 
   auto fbb = std::make_shared<flatbuffers::FlatBufferBuilder>();
 
-  std::shared_ptr<igasync::Promise<BasisuProcessor::Image2DGenRsl>> gen_rsl =
-      nullptr;
-
+  BasisuProcessor::Image2DGenRsl gen_rsl;
   switch (output->image_encoding()) {
     case IgAsset::Image2DEncoding_RGBA8Unorm:
-      gen_rsl = igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-          rgba8_unorm_out(output, fbb, *resized_img));
+      gen_rsl = rgba8_unorm_out(output, fbb, *resized_img);
       break;
     case IgAsset::Image2DEncoding_ETC1S:
     case IgAsset::Image2DEncoding_UASTC_LDR_4_4:
-      gen_rsl = igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-          basisu_ldr_out(output, fbb, *resized_img));
+      gen_rsl = basisu_ldr_out(output, fbb, *resized_img);
       break;
     default:
       log_->error("Unexpected Image2DEncoding value for output {}",
                   output->output_file_path()->str());
-      gen_rsl = igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-          BasisuProcessor::AltResult::InvalidOutputFormat);
-      break;
+      return false;
   }
 
-  return gen_rsl->then(
-      [this, output, fbb](const BasisuProcessor::Image2DGenRsl& rsl) -> bool {
-        if (std::holds_alternative<BasisuProcessor::AltResult>(rsl)) {
-          auto alt_rsl = std::get<BasisuProcessor::AltResult>(rsl);
-          switch (alt_rsl) {
-            case BasisuProcessor::AltResult::UseCached:
-              log_->info("Output is up to date, skipping generation");
-              return true;
-            case BasisuProcessor::AltResult::FsErr:
-            case BasisuProcessor::AltResult::InvalidOutputFormat:
-              log_->error("Error generating {}",
-                          output->output_file_path()->str());
-              return false;
-            case BasisuProcessor::AltResult::CompressionFailure:
-              log_->error("Error compressing {}",
-                          output->output_file_path()->str());
-              return false;
-          }
-        }
+  if (std::holds_alternative<BasisuProcessor::AltResult>(gen_rsl)) {
+    auto alt_rsl = std::get<BasisuProcessor::AltResult>(gen_rsl);
+    switch (alt_rsl) {
+      case BasisuProcessor::AltResult::UseCached:
+        log_->info("Output is up to date, skipping generation");
+        return true;
+      case BasisuProcessor::AltResult::FsErr:
+      case BasisuProcessor::AltResult::InvalidOutputFormat:
+        log_->error("Error generating {}", output->output_file_path()->str());
+        return false;
+      case BasisuProcessor::AltResult::CompressionFailure:
+        log_->error("Error compressing {}", output->output_file_path()->str());
+        return false;
+    }
+  }
 
-        auto fb_image2d = std::get<flatbuffers::Offset<IgAsset::Image2D>>(rsl);
+  auto fb_image2d = std::get<flatbuffers::Offset<IgAsset::Image2D>>(gen_rsl);
 
-        auto asset = IgAsset::CreateAsset(
-            *fbb, IgAsset::SingleAssetData_Image2D, fb_image2d.Union());
-        fbb->Finish(asset);
+  auto asset = IgAsset::CreateAsset(*fbb, IgAsset::SingleAssetData_Image2D,
+                                    fb_image2d.Union());
+  fbb->Finish(asset);
 
-        return filesystem_->write_bin(
-            config_.IgassetPathRoot / output->output_file_path()->str(), *fbb);
-      },
-      io_task_list_);
+  return filesystem_->write_bin(
+      config_.IgassetPathRoot / output->output_file_path()->str(), *fbb);
 }
 
 std::shared_ptr<igasync::Promise<bool>>
@@ -173,23 +161,18 @@ BasisuProcessor::execute_image_to_texture2d(
   log_->info("Processing ImageToTexture2DAction for input file {}",
              input_file_path.string());
 
-  return io_task_list_
-      ->run([filesystem = filesystem_, config = config_, log = log_,
-             input_file_path, action]() -> std::optional<std::string> {
+  return exec_task_list_
+      ->run([filesystem = filesystem_, log = log_,
+             input_file_path]() -> std::optional<StbImageData> {
         // TODO (kamaron): Check for cached output here and return
-        return filesystem->read_bin(input_file_path);
-      })
-      ->then_consuming(
-          [log = log_, input_file_path](
-              std::optional<std::string> rsl) -> std::optional<StbImageData> {
-            if (!rsl.has_value()) {
-              log->error("Failed to read file {}", input_file_path.string());
-              return std::nullopt;
-            }
+        auto rsl = filesystem->read_bin(input_file_path);
+        if (!rsl.has_value()) {
+          log->error("Failed to read file {}", input_file_path.string());
+          return std::nullopt;
+        }
 
-            return StbImageData::from_memory(*rsl);
-          },
-          exec_task_list_)
+        return StbImageData::from_memory(*rsl);
+      })
       ->then_chain_consuming(
           [log = log_, input_file_path, action,
            exec_task_list = exec_task_list_,
@@ -199,6 +182,8 @@ BasisuProcessor::execute_image_to_texture2d(
               return igasync::Promise<bool>::Immediate(false);
             }
 
+            auto rsl_img = std::make_shared<StbImageData>(std::move(*rsl));
+
             auto combiner = igasync::PromiseCombiner::Create();
 
             std::vector<igasync::PromiseCombiner::PromiseKey<bool, false>>
@@ -206,7 +191,10 @@ BasisuProcessor::execute_image_to_texture2d(
 
             for (auto* output : *action->outputs()) {
               results.push_back(combiner->add(
-                  generate_single_output(output, *rsl), exec_task_list));
+                  exec_task_list->run([this, output, rsl_img]() -> bool {
+                    return generate_single_output(output, *rsl_img);
+                  }),
+                  exec_task_list));
             }
 
             return combiner->combine(
@@ -276,214 +264,166 @@ BasisuProcessor::execute_generate_spritesheet(
   // TODO (kamaron): Perform cache check here (OK to do on main thread, it's a
   //  quick check that skips a lot of work if it succeed)
 
-  // Images must be blitted serially. There's probably a better IO system here
-  //  to allow buffering some input images in memory here, and there's
-  //  DEFINITELY a better parallelization scheme that involves setting up a
-  //  dependency graph based on write-to area (e.g., a 30% x 30% sprite in the
-  //  top left shouldn't be blocked by a write for one of the same size in the
-  //  top left!) but for now this will be fine.
+  // All sprite reads + blits happen serially inside a single exec task.
+  // There's DEFINITELY a better parallelization scheme that involves setting
+  // up a dependency graph based on write-to area (e.g., a 30% x 30% sprite in
+  // the top left shouldn't be blocked by a write for one of the same size in
+  // the top left!) but for now this will be fine.
   // The expensive part of spritesheet generation is the image encoding anyways
   //  if any sort of texture compression is used!
-  auto last_blit_promise = igasync::Promise<bool>::Immediate(true);
-  for (auto* sprite : *fb_sprites) {
-    last_blit_promise = last_blit_promise->then_chain(
-        [output_image, io_task_list = io_task_list_, log = log_,
-         exec_task_list = exec_task_list_, action, filesystem = filesystem_,
-         config = config_, sprite](bool last_blit_rsl) {
-          if (!last_blit_rsl) {
-            return igasync::Promise<bool>::Immediate(false);
-          }
+  return exec_task_list_->run([this, fb_sprites, fb_output_image, output_image,
+                               output_file_path]() -> bool {
+    for (auto* sprite : *fb_sprites) {
+      auto fb_input_file_path = sprite->input_file_path();
+      if (fb_input_file_path == nullptr) {
+        log_->error(
+            "Could not read input file path when processing "
+            "GenerateSpritesheet - aborting");
+        return false;
+      }
+      auto input_file_path =
+          config_.InputAssetPathRoot / fb_input_file_path->str();
 
-          auto fb_input_file_path = sprite->input_file_path();
-          if (fb_input_file_path == nullptr) {
-            log->error(
-                "Could not read input file path when processing "
-                "GenerateSpritesheet - aborting");
-            return igasync::Promise<bool>::Immediate(false);
-          }
-          auto input_file_path =
-              config.InputAssetPathRoot / sprite->input_file_path()->str();
+      auto rsl = filesystem_->read_bin(input_file_path);
+      if (!rsl.has_value()) {
+        // read_bin logs the failure on error
+        return false;
+      }
 
-          return io_task_list
-              ->run([filesystem, config, log, input_file_path, sprite] {
-                return filesystem->read_bin(input_file_path);
-              })
-              ->then_consuming(
-                  [log, input_file_path, output_image,
-                   sprite](std::optional<std::string> rsl) -> bool {
-                    if (!rsl.has_value()) {
-                      return false;
-                    }
+      // Force RGBA (4-channel) load so the source always matches
+      // the 4-channel blank_rgba canvas.
+      auto sprite_opt = StbImageData::from_memory(*rsl, 4);
+      if (!sprite_opt.has_value()) {
+        log_->error("Failed to read sprite from {}", input_file_path.string());
+        return false;
+      }
 
-                    // Force RGBA (4-channel) load so the source always matches
-                    // the 4-channel blank_rgba canvas.
-                    auto sprite_opt = StbImageData::from_memory(*rsl, 4);
-                    if (!sprite_opt.has_value()) {
-                      log->error("Failed to read sprite from {}",
-                                 input_file_path.string());
-                      return false;
-                    }
+      auto fb_sprite_loc = sprite->sprite();
+      if (fb_sprite_loc == nullptr) {
+        log_->error(
+            "Missing 'sprite' location in SpriteSubAction for "
+            "input {}",
+            input_file_path.string());
+        return false;
+      }
 
-                    auto fb_sprite_loc = sprite->sprite();
-                    if (fb_sprite_loc == nullptr) {
-                      log->error(
-                          "Missing 'sprite' location in SpriteSubAction for "
-                          "input {}",
-                          input_file_path.string());
-                      return false;
-                    }
+      int dst_x = fb_sprite_loc->x();
+      int dst_y = fb_sprite_loc->y();
+      int dst_w = fb_sprite_loc->w();
+      int dst_h = fb_sprite_loc->h();
 
-                    int dst_x = fb_sprite_loc->x();
-                    int dst_y = fb_sprite_loc->y();
-                    int dst_w = fb_sprite_loc->w();
-                    int dst_h = fb_sprite_loc->h();
+      if (dst_w <= 0 || dst_h <= 0) {
+        log_->error("Invalid sprite dimensions {} x {} for input {}", dst_w,
+                    dst_h, input_file_path.string());
+        return false;
+      }
 
-                    if (dst_w <= 0 || dst_h <= 0) {
-                      log->error(
-                          "Invalid sprite dimensions {} x {} for input {}",
-                          dst_w, dst_h, input_file_path.string());
-                      return false;
-                    }
+      // Optionally crop the source before blitting.
+      const StbImageData* blit_src = &*sprite_opt;
+      std::optional<StbImageData> cropped_opt;
+      int crop_x = sprite->crop_left();
+      int crop_y = sprite->crop_top();
+      bool has_right = sprite->crop_right() > -1;
+      bool has_bottom = sprite->crop_bottom() > -1;
+      if (crop_x != 0 || crop_y != 0 || has_right || has_bottom) {
+        int crop_w = has_right ? sprite->crop_right() - crop_x
+                               : sprite_opt->width - crop_x;
+        int crop_h = has_bottom ? sprite->crop_bottom() - crop_y
+                                : sprite_opt->height - crop_y;
+        cropped_opt = sprite_opt->crop(crop_x, crop_y, crop_w, crop_h);
+        if (!cropped_opt.has_value()) {
+          log_->error("Failed to crop sprite from {} at [{},{}] {}x{}",
+                      input_file_path.string(), crop_x, crop_y, crop_w, crop_h);
+          return false;
+        }
+        blit_src = &*cropped_opt;
+      }
 
-                    // Optionally crop the source before blitting.
-                    const StbImageData* blit_src = &*sprite_opt;
-                    std::optional<StbImageData> cropped_opt;
-                    int crop_x = sprite->crop_left();
-                    int crop_y = sprite->crop_top();
-                    bool has_right = sprite->crop_right() > -1;
-                    bool has_bottom = sprite->crop_bottom() > -1;
-                    if (crop_x != 0 || crop_y != 0 || has_right || has_bottom) {
-                      int crop_w = has_right
-                                       ? sprite->crop_right() - crop_x
-                                       : sprite_opt->width - crop_x;
-                      int crop_h = has_bottom
-                                       ? sprite->crop_bottom() - crop_y
-                                       : sprite_opt->height - crop_y;
-                      cropped_opt = sprite_opt->crop(crop_x, crop_y, crop_w, crop_h);
-                      if (!cropped_opt.has_value()) {
-                        log->error(
-                            "Failed to crop sprite from {} at [{},{}] {}x{}",
-                            input_file_path.string(), crop_x, crop_y, crop_w,
-                            crop_h);
-                        return false;
-                      }
-                      blit_src = &*cropped_opt;
-                    }
+      if (!output_image->blit(*blit_src, dst_x, dst_y, dst_w, dst_h)) {
+        log_->error("Failed to blit sprite from {} to ({}, {})",
+                    input_file_path.string(), dst_x, dst_y);
+        return false;
+      }
+    }
 
-                    return output_image->blit(*blit_src, dst_x, dst_y, dst_w,
-                                              dst_h);
-                  },
-                  exec_task_list);
-        },
-        exec_task_list_);
-  }
+    // Once all sprites have been blitted to the output image, assemble the
+    //  final igasset flatbuffer and write it to file.
+    auto fbb = std::make_shared<flatbuffers::FlatBufferBuilder>();
 
-  // Once all sprites have been blitted to the output image, assemble the final
-  //  igasset flatbuffer and write it to file.
-  return last_blit_promise->then_chain(
-      [log = log_, output_file_path, io_task_list = io_task_list_, output_image,
-       fb_sprites, fb_output_image, this](bool all_spritesheets_written)
-          -> std::shared_ptr<igasync::Promise<bool>> {
-        if (!all_spritesheets_written) {
-          log->error("Not all sprites succeeded write for {}",
+    BasisuProcessor::Image2DGenRsl gen_rsl;
+    switch (fb_output_image->image_encoding()) {
+      case IgAsset::Image2DEncoding_RGBA8Unorm:
+        gen_rsl = rgba8_unorm_out(fb_output_image, fbb, *output_image);
+        break;
+      case IgAsset::Image2DEncoding_ETC1S:
+      case IgAsset::Image2DEncoding_UASTC_LDR_4_4:
+        gen_rsl = basisu_ldr_out(fb_output_image, fbb, *output_image);
+        break;
+      default:
+        log_->error("Unexpected Image2DEncoding value for output {}",
+                    output_file_path.string());
+        return false;
+    }
+
+    if (std::holds_alternative<BasisuProcessor::AltResult>(gen_rsl)) {
+      auto alt_rsl = std::get<BasisuProcessor::AltResult>(gen_rsl);
+      switch (alt_rsl) {
+        case BasisuProcessor::AltResult::UseCached:
+          log_->info("Output {} is up to date, skipping generation",
                      output_file_path.string());
-          return igasync::Promise<bool>::Immediate(false);
-        }
+          return true;
+        case BasisuProcessor::AltResult::FsErr:
+        case BasisuProcessor::AltResult::InvalidOutputFormat:
+          log_->error("Error generating {}", output_file_path.string());
+          return false;
+        case BasisuProcessor::AltResult::CompressionFailure:
+          log_->error("Error compressing {}", output_file_path.string());
+          return false;
+      }
+    }
 
-        auto fbb = std::make_shared<flatbuffers::FlatBufferBuilder>();
-        std::shared_ptr<igasync::Promise<BasisuProcessor::Image2DGenRsl>>
-            gen_rsl = nullptr;
+    auto fb_image2d = std::get<flatbuffers::Offset<IgAsset::Image2D>>(gen_rsl);
 
-        switch (fb_output_image->image_encoding()) {
-          case IgAsset::Image2DEncoding_RGBA8Unorm:
-            gen_rsl =
-                igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-                    rgba8_unorm_out(fb_output_image, fbb, *output_image));
-            break;
-          case IgAsset::Image2DEncoding_ETC1S:
-          case IgAsset::Image2DEncoding_UASTC_LDR_4_4:
-            gen_rsl =
-                igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-                    basisu_ldr_out(fb_output_image, fbb, *output_image));
-            break;
-          default:
-            log_->error("Unexpected Image2DEncoding value for output {}",
-                        output_file_path.string());
-            gen_rsl =
-                igasync::Promise<BasisuProcessor::Image2DGenRsl>::Immediate(
-                    BasisuProcessor::AltResult::InvalidOutputFormat);
-            break;
-        }
+    std::vector<flatbuffers::Offset<IgAsset::Sprite>> out_sprites;
+    for (auto fb_sprite : *fb_sprites) {
+      auto fb_in_sprite = fb_sprite->sprite();
+      if (fb_in_sprite == nullptr) {
+        log_->error(
+            "Could not read "
+            "GenerateSpritesheetAction::sprites[]::sprite in {}",
+            output_file_path.string());
+        return false;
+      }
 
-        return gen_rsl->then(
-            [this, fbb, output_file_path,
-             fb_sprites](const BasisuProcessor::Image2DGenRsl& rsl) -> bool {
-              if (std::holds_alternative<BasisuProcessor::AltResult>(rsl)) {
-                auto alt_rsl = std::get<BasisuProcessor::AltResult>(rsl);
-                switch (alt_rsl) {
-                  case BasisuProcessor::AltResult::UseCached:
-                    log_->info("Output {} is up to date, skipping generation",
-                               output_file_path.string());
-                    return true;
-                  case BasisuProcessor::AltResult::FsErr:
-                  case BasisuProcessor::AltResult::InvalidOutputFormat:
-                    log_->error("Error generating {}",
-                                output_file_path.string());
-                    return false;
-                  case BasisuProcessor::AltResult::CompressionFailure:
-                    log_->error("Error compressing {}",
-                                output_file_path.string());
-                    return false;
-                }
-              }
+      auto fb_in_sprite_name = fb_in_sprite->name();
+      if (fb_in_sprite_name == nullptr) {
+        log_->error(
+            "Could not read "
+            "GenerateSpritesheetAction::sprites[]::sprite::name in "
+            "{}",
+            output_file_path.string());
+        return false;
+      }
 
-              auto fb_image2d =
-                  std::get<flatbuffers::Offset<IgAsset::Image2D>>(rsl);
+      auto sprite_name = fb_in_sprite_name->str();
 
-              std::vector<flatbuffers::Offset<IgAsset::Sprite>> out_sprites;
-              for (auto fb_sprite : *fb_sprites) {
-                auto fb_in_sprite = fb_sprite->sprite();
-                if (fb_in_sprite == nullptr) {
-                  log_->error(
-                      "Could not read "
-                      "GenerateSpritesheetAction::sprites[]::sprite in {}",
-                      output_file_path.string());
-                  return false;
-                }
+      auto fb_out_sprite = IgAsset::CreateSprite(
+          *fbb, fbb->CreateString(sprite_name), fb_in_sprite->x(),
+          fb_in_sprite->y(), fb_in_sprite->w(), fb_in_sprite->h());
 
-                auto fb_in_sprite_name = fb_in_sprite->name();
-                if (fb_in_sprite_name == nullptr) {
-                  log_->error(
-                      "Could not read "
-                      "GenerateSpritesheetAction::sprites[]::sprite::name in "
-                      "{}",
-                      output_file_path.string());
-                  return false;
-                }
+      out_sprites.push_back(fb_out_sprite);
+    }
 
-                auto sprite_name = fb_in_sprite_name->str();
+    auto fb_out_sprites = fbb->CreateVector(out_sprites);
 
-                auto fb_out_sprite = IgAsset::CreateSprite(
-                    *fbb, fbb->CreateString(sprite_name), fb_in_sprite->x(),
-                    fb_in_sprite->y(), fb_in_sprite->w(), fb_in_sprite->h());
+    auto fb_out_spritesheet =
+        IgAsset::CreateSpritesheet(*fbb, fb_image2d, fb_out_sprites);
+    auto fb_out_asset = IgAsset::CreateAsset(
+        *fbb, IgAsset::SingleAssetData_Spritesheet, fb_out_spritesheet.Union());
+    fbb->Finish(fb_out_asset);
 
-                out_sprites.push_back(fb_out_sprite);
-              }
-
-              auto fb_out_sprites = fbb->CreateVector(out_sprites);
-
-              auto fb_out_spritesheet =
-                  IgAsset::CreateSpritesheet(*fbb, fb_image2d, fb_out_sprites);
-              auto fb_out_asset = IgAsset::CreateAsset(
-                  *fbb, IgAsset::SingleAssetData_Spritesheet,
-                  fb_out_spritesheet.Union());
-              fbb->Finish(fb_out_asset);
-
-              return filesystem_->write_bin(output_file_path, *fbb);
-            },
-            io_task_list);
-      },
-      exec_task_list_);
+    return filesystem_->write_bin(output_file_path, *fbb);
+  });
 }
 
 std::variant<flatbuffers::Offset<IgAsset::Image2D>, BasisuProcessor::AltResult>

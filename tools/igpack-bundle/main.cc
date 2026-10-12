@@ -12,8 +12,8 @@
 
 #include <flatbuffers/idl.h>
 #include <igpack-bundle/exec-config.h>
-#include <igpack-bundle/schema/igpack-bundle-plan.h>
 #include <igpack-bundle/schema/igpack-bundle-plan-embedded.h>
+#include <igpack-bundle/schema/igpack-bundle-plan.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <CLI/CLI.hpp>
@@ -354,8 +354,7 @@ int main(int argc, char** argv) {
   // Kick off igpack bundling
   log->info("Starting IgPack bundling for {} bundles...",
             igpack_bundle_plan->igpack_gen_actions()->size());
-  auto filesystem =
-      std::make_shared<toolutils::Filesystem>(log, /* io_task_list= */ nullptr);
+  auto filesystem = std::make_shared<toolutils::Filesystem>(log);
 
   for (const auto* igpack_gen_action :
        *igpack_bundle_plan->igpack_gen_actions()) {

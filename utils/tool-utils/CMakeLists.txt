@@ -23,5 +23,5 @@ set(tool-utils-sources
 
 add_library(tool-utils STATIC ${tool-utils-headers} ${tool-utils-sources})
 set_property(TARGET tool-utils PROPERTY CXX_STANDARD 23)
-target_link_libraries(tool-utils PUBLIC spdlog::spdlog flatbuffers igasync toolutils_types_schema toolutils_igasset_schema picosha2)
+target_link_libraries(tool-utils PUBLIC spdlog::spdlog flatbuffers toolutils_types_schema toolutils_igasset_schema picosha2)
 target_include_directories(tool-utils PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

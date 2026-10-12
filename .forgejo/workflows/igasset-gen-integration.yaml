@@ -41,6 +41,11 @@ jobs:
           --target enumerate-igasset
           --target igpack-bundle
           --target enumerate-igpack
+          --target extract-asset-metadata
+          --target staged-asset-io-selftest
+
+      - name: Run staged-asset-io selftest
+        run: build/tools/staged-asset-io/staged-asset-io-selftest
 
       - name: Run igasset-gen Integration Tests
         env:
@@ -54,3 +59,8 @@ jobs:
           IGPACK_BUNDLE_BIN: build/tools/igpack-bundle/igpack-bundle
           ENUMERATE_IGPACK_BIN: build/tools/enumerate-igpack/enumerate-igpack
         run: pytest tools/igpack-bundle/e2e/ -v
+
+      - name: Run extract-asset-metadata Integration Tests
+        env:
+          EXTRACT_ASSET_METADATA_BIN: build/tools/extract-asset-metadata/extract-asset-metadata
+        run: pytest tools/extract-asset-metadata/e2e/ -v

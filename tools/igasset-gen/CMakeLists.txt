@@ -36,7 +36,6 @@ embed_fbs_schema(
 
 set(igasset-gen-headers
   "include/igasset-gen/assimp-geo-processor.h"
-  "include/igasset-gen/assimp-util.h"
   "include/igasset-gen/basisu-processor.h"
   "include/igasset-gen/exec-config.h"
   "include/igasset-gen/igasset-generator.h"
@@ -46,7 +45,6 @@ set(igasset-gen-headers
 
 set(igasset-gen-sources
   "src/assimp-geo-processor.cc"
-  "src/assimp-util.cc"
   "src/basisu-processor.cc"
   "src/igasset-generator.cc"
   "src/inc-build.cc"
@@ -60,7 +58,7 @@ target_link_libraries(igasset-gen
   PRIVATE igasset_gen_igasset_schema igasset_gen_igpack_schema igasset_gen_plan_schema igasset_gen_types_schema
           igasset_gen_plan_schema_embedded
           CLI11::CLI11 spdlog::spdlog igasync igasset tool-utils
-          assimp draco_lib stb)
+          assimp draco_lib stb staged-asset-io)
 target_include_directories(igasset-gen
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
           "${CMAKE_BINARY_DIR}")

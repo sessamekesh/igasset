@@ -1,0 +1,4 @@
+# igasset test fixture: material library for triangle.obj
+newmtl red
+Kd 1 0 0
+map_Kd tex.png

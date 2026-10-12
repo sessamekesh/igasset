@@ -1,3 +1,5 @@
+add_subdirectory(staged-asset-io)
+add_subdirectory(extract-asset-metadata)
 add_subdirectory(enumerate-assimp)
 add_subdirectory(enumerate-igasset)
 add_subdirectory(enumerate-igpack)

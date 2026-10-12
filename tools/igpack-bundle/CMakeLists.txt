@@ -45,7 +45,7 @@ set_target_properties(igpack-bundle PROPERTIES CXX_STANDARD 23)
 target_link_libraries(igpack-bundle
   PRIVATE igpack_bundle_types_schema igpack_bundle_igasset_schema igpack_bundle_igpack_schema igpack_bundle_igpack_bundle_schema
           igpack_bundle_plan_schema_embedded
-          CLI11::CLI11 spdlog::spdlog igasync igasset tool-utils)
+          CLI11::CLI11 spdlog::spdlog igasset tool-utils)
 target_include_directories(igpack-bundle
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
           "${CMAKE_BINARY_DIR}")

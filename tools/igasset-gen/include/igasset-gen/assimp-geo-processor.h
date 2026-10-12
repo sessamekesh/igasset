@@ -16,12 +16,10 @@ class AssimpGeoProcessor {
  public:
   AssimpGeoProcessor(std::shared_ptr<spdlog::logger> log,
                      PlanInvocationConfig config,
-                     std::shared_ptr<igasync::TaskList> io_task_list,
                      std::shared_ptr<igasync::TaskList> exec_task_list,
                      std::shared_ptr<toolutils::Filesystem> filesystem)
       : log_(log->clone("AssimpGeoProcessor")),
         config_(config),
-        io_task_list_(io_task_list),
         exec_task_list_(exec_task_list),
         filesystem_(filesystem) {}
   AssimpGeoProcessor(const AssimpGeoProcessor&) = delete;
@@ -39,7 +37,6 @@ class AssimpGeoProcessor {
  private:
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
-  std::shared_ptr<igasync::TaskList> io_task_list_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
   std::shared_ptr<toolutils::Filesystem> filesystem_;
 };

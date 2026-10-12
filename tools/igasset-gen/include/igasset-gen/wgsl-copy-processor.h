@@ -16,12 +16,10 @@ class WgslCopyProcessor {
  public:
   WgslCopyProcessor(std::shared_ptr<spdlog::logger> log,
                     PlanInvocationConfig config,
-                    std::shared_ptr<igasync::TaskList> io_task_list,
                     std::shared_ptr<igasync::TaskList> exec_task_list,
                     std::shared_ptr<toolutils::Filesystem> filesystem)
       : log_(log->clone("WgslCopyProcessor")),
         config_(config),
-        io_task_list_(io_task_list),
         exec_task_list_(exec_task_list),
         filesystem_(filesystem) {}
   WgslCopyProcessor(const WgslCopyProcessor&) = delete;
@@ -50,7 +48,6 @@ class WgslCopyProcessor {
  private:
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
-  std::shared_ptr<igasync::TaskList> io_task_list_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
   std::shared_ptr<toolutils::Filesystem> filesystem_;
 };

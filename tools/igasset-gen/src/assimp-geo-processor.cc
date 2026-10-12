@@ -12,12 +12,12 @@
 #include <flatbuffers/flatbuffer_builder.h>
 #include <flatbuffers/string.h>
 #include <igasset-gen/assimp-geo-processor.h>
-#include <igasset-gen/assimp-util.h>
 #include <igasset-gen/inc-build.h>
 #include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasset/schema/igasset.h>
 #include <igasset/vertex_types.h>
 #include <igasync/promise.h>
+#include <staged-asset-io/assimp-import.h>
 
 #include <algorithm>
 #include <assimp/Importer.hpp>
@@ -221,7 +221,7 @@ std::shared_ptr<BaseGeoData> extract_base_geo(
 }
 
 MeshLoadResult load_mesh_from_scene(
-    std::shared_ptr<igassetgen::AssimpSceneData> maybe_scene_data,
+    std::shared_ptr<stagedio::AssimpSceneData> maybe_scene_data,
     const std::string& mesh_name) {
   if (!maybe_scene_data) {
     return {nullptr, glm::mat4(1.0f)};
@@ -271,488 +271,449 @@ AssimpGeoProcessor::draco_asset_from_assimp(
   log_->info("Extracting DRACO assets from {}",
              action->input_file_path()->str());
 
-  return io_task_list_
-      ->run([filesystem = filesystem_, config = config_, log = log_,
-             input_file_path,
-             action]() -> std::optional<LoadAssimpFileAltResult> {
-        std::vector<std::filesystem::path> input_paths;
-        input_paths.push_back(input_file_path);
-        std::filesystem::path output_file_path =
-            config.IgassetPathRoot / action->output_file_path()->str();
-        if (skip_rebuild(config, std::move(input_paths), output_file_path,
-                         log)) {
-          return LoadAssimpFileAltResult::UseCached;
+  // The synchronous Assimp -> Draco encoding pipeline for this action: import
+  // the scene via Assimp, validate + extract the requested meshes, encode the
+  // combined geometry via Draco, and build the resulting igasset FlatBuffer.
+  // Held as a local lambda so the (long) pipeline body stays colocated with
+  // the exec task that drives it.
+  auto process = [action, input_file_path, log = log_]()
+      -> std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
+                      LoadAssimpFileAltResult> {
+    auto assimp_scene = stagedio::load_scene(
+        input_file_path, action->output_file_path()->str(), log);
+    if (assimp_scene == nullptr) {
+      log->error("Could not load scene for {}",
+                 action->output_file_path()->str());
+      return LoadAssimpFileAltResult::AssimpParseError;
+    }
+
+    uint32_t index_offset = 0u;
+    bool has_texcoords = false;
+    bool has_bones = false;
+    uint32_t num_vertices = 0u;
+    uint32_t num_faces = 0u;
+
+    //
+    // Mesh validation...
+    for (int i = 0; i < action->assimp_mesh_names()->size(); i++) {
+      std::string mesh_name = action->assimp_mesh_names()->Get(i)->str();
+
+      auto mesh_result = ::load_mesh_from_scene(assimp_scene, mesh_name);
+      const aiMesh* mesh = mesh_result.mesh;
+      if (mesh == nullptr) {
+        log->error("Mesh {} not found in scene for {}", mesh_name,
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::UnexpectedModelDataError;
+      }
+
+      if (i == 0) {
+        has_texcoords = mesh->HasTextureCoords(0);
+        has_bones = mesh->HasBones();
+      } else {
+        if (has_texcoords != mesh->HasTextureCoords(0)) {
+          log->error(
+              "Texcoord presence mismatch on {} - mesh {} has value "
+              "{}, "
+              "which does not match mesh 0",
+              action->output_file_path()->str(), i, mesh->HasTextureCoords(0));
+          return LoadAssimpFileAltResult::UnexpectedModelDataError;
         }
-
-        auto rsl = filesystem->read_bin(input_file_path);
-        if (!rsl.has_value()) {
-          return LoadAssimpFileAltResult::FsErr;
+        if (has_bones != mesh->HasBones()) {
+          log->error(
+              "Bone presence mismatch on {} - mesh {} has value {}, "
+              "which "
+              "does not match mesh 0",
+              action->output_file_path()->str(), i, mesh->HasBones());
+          return LoadAssimpFileAltResult::UnexpectedModelDataError;
         }
-        if (rsl->empty()) {
-          return LoadAssimpFileAltResult::EmptyBin;
+      }
+      num_vertices += mesh->mNumVertices;
+      num_faces += mesh->mNumFaces;
+    }
+
+    //
+    // Validation finished! Extract geometry data...
+    std::vector<igasset::PositionNormalVertexData3D> pos_norm_data;
+    std::vector<igasset::TangentBitangentVertexData3D> tb_data;
+    std::vector<igasset::TexcoordVertexData> texcoord_data;
+    std::vector<igasset::BoneWeightsVertexData> bone_data;
+    std::vector<BoneMeta> bone_meta;
+    std::vector<std::uint32_t> index_data;
+    pos_norm_data.reserve(num_vertices);
+    tb_data.reserve(num_vertices);
+    texcoord_data.reserve(has_texcoords ? num_vertices : 1u);
+    bone_data.reserve(has_bones ? num_vertices : 1u);
+    bone_meta.reserve(has_bones ? num_vertices : 1u);
+    index_data.reserve(num_faces * 3u);
+
+    for (int i = 0; i < action->assimp_mesh_names()->size(); i++) {
+      std::string mesh_name = action->assimp_mesh_names()->Get(i)->str();
+
+      auto mesh_result = ::load_mesh_from_scene(assimp_scene, mesh_name);
+      if (mesh_result.mesh == nullptr) {
+        log->error("Mesh {} not found in scene for {}", mesh_name,
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::UnexpectedModelDataError;
+      }
+
+      auto geo_data = ::extract_base_geo(mesh_result, log);
+      if (geo_data == nullptr) {
+        log->error("Failed to extract relevant static geo data for {} -- {}",
+                   action->output_file_path()->str(), mesh_name);
+        return LoadAssimpFileAltResult::UnexpectedModelDataError;
+      }
+      for (int j = 0; j < geo_data->posNormData.size(); j++) {
+        pos_norm_data.push_back(geo_data->posNormData[j]);
+      }
+      for (int j = 0; j < geo_data->tbData.size(); j++) {
+        tb_data.push_back(geo_data->tbData[j]);
+      }
+      for (int j = 0; j < geo_data->texcoordData.size(); j++) {
+        texcoord_data.push_back(geo_data->texcoordData[j]);
+      }
+      for (int j = 0; j < geo_data->boneWeightsData.size(); j++) {
+        bone_data.push_back(geo_data->boneWeightsData[j]);
+      }
+      for (int j = 0; j < geo_data->indexData.size(); j++) {
+        index_data.push_back(geo_data->indexData[j] + index_offset);
+      }
+      index_offset += mesh_result.mesh->mNumVertices;
+
+      if (i == 0) {
+        bone_meta = geo_data->boneMetadata;
+      } else {
+        if (bone_meta.size() != geo_data->boneMetadata.size()) {
+          log->error(
+              "Bone metadata mismatch, cannot extract bone bindings "
+              "for {}",
+              mesh_name);
+          return LoadAssimpFileAltResult::UnexpectedModelDataError;
         }
-        return std::nullopt;
-      })
-      ->then_consuming(
-          [action, input_file_path,
-           log = log_](std::optional<LoadAssimpFileAltResult> check_result)
-              -> std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
-                              LoadAssimpFileAltResult> {
-            //
-            // ASSIMP parsing...
-            if (check_result.has_value()) {
-              return *check_result;
-            }
+        for (int j = 0; j < geo_data->boneMetadata.size(); j++) {
+          if (bone_meta[j].name != geo_data->boneMetadata[j].name) {
+            log->error(
+                "Bone name mismatch in mesh {} at bone {} (expected "
+                "{})",
+                mesh_name, geo_data->boneMetadata[j].name, bone_meta[j].name);
+            return LoadAssimpFileAltResult::UnexpectedModelDataError;
+          }
+        }
+      }
+    }
 
-            auto assimp_scene = load_scene(
-                input_file_path, action->output_file_path()->str(), log);
-            if (assimp_scene == nullptr) {
-              log->error("Could not load scene for {}",
-                         action->output_file_path()->str());
-              return LoadAssimpFileAltResult::AssimpParseError;
-            }
+    if (index_data.size() % 3 != 0) {
+      log->error("Invalid number of triangle indices {} for {}",
+                 index_data.size(), action->output_file_path()->str());
+      return LoadAssimpFileAltResult::UnexpectedModelDataError;
+    }
 
-            uint32_t index_offset = 0u;
-            bool has_texcoords = false;
-            bool has_bones = false;
-            uint32_t num_vertices = 0u;
-            uint32_t num_faces = 0u;
+    if (index_data.size() == 0) {
+      log->error("No faces found for {}", action->output_file_path()->str());
+      return LoadAssimpFileAltResult::UnexpectedModelDataError;
+    }
 
-            //
-            // Mesh validation...
-            for (int i = 0; i < action->assimp_mesh_names()->size(); i++) {
-              std::string mesh_name =
-                  action->assimp_mesh_names()->Get(i)->str();
+    //
+    // Draco encoding...
+    draco::Mesh draco_mesh;
+    draco_mesh.set_num_points(pos_norm_data.size());
 
-              auto mesh_result =
-                  ::load_mesh_from_scene(assimp_scene, mesh_name);
-              const aiMesh* mesh = mesh_result.mesh;
-              if (mesh == nullptr) {
-                log->error("Mesh {} not found in scene for {}", mesh_name,
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::UnexpectedModelDataError;
-              }
+    draco::DataBuffer pos_norm_data_buffer;
+    pos_norm_data_buffer.Update(
+        &pos_norm_data[0],
+        pos_norm_data.size() * sizeof(igasset::PositionNormalVertexData3D));
 
-              if (i == 0) {
-                has_texcoords = mesh->HasTextureCoords(0);
-                has_bones = mesh->HasBones();
-              } else {
-                if (has_texcoords != mesh->HasTextureCoords(0)) {
-                  log->error(
-                      "Texcoord presence mismatch on {} - mesh {} has value "
-                      "{}, "
-                      "which does not match mesh 0",
-                      action->output_file_path()->str(), i,
-                      mesh->HasTextureCoords(0));
-                  return LoadAssimpFileAltResult::UnexpectedModelDataError;
-                }
-                if (has_bones != mesh->HasBones()) {
-                  log->error(
-                      "Bone presence mismatch on {} - mesh {} has value {}, "
-                      "which "
-                      "does not match mesh 0",
-                      action->output_file_path()->str(), i, mesh->HasBones());
-                  return LoadAssimpFileAltResult::UnexpectedModelDataError;
-                }
-              }
-              num_vertices += mesh->mNumVertices;
-              num_faces += mesh->mNumFaces;
-            }
+    int pos_attribute_idx = -1;
+    int normal_attribute_idx = -1;
+    int tangent_attribute_idx = -1;
+    int bitangent_attribute_idx = -1;
+    int texcoord_attribute_idx = -1;
+    int bone_idx_attrib_idx = -1;
+    int bone_weight_attrib_idx = -1;
 
-            //
-            // Validation finished! Extract geometry data...
-            std::vector<igasset::PositionNormalVertexData3D> pos_norm_data;
-            std::vector<igasset::TangentBitangentVertexData3D> tb_data;
-            std::vector<igasset::TexcoordVertexData> texcoord_data;
-            std::vector<igasset::BoneWeightsVertexData> bone_data;
-            std::vector<BoneMeta> bone_meta;
-            std::vector<std::uint32_t> index_data;
-            pos_norm_data.reserve(num_vertices);
-            tb_data.reserve(num_vertices);
-            texcoord_data.reserve(has_texcoords ? num_vertices : 1u);
-            bone_data.reserve(has_bones ? num_vertices : 1u);
-            bone_meta.reserve(has_bones ? num_vertices : 1u);
-            index_data.reserve(num_faces * 3u);
+    // Position attribute
+    {
+      draco::GeometryAttribute pos_attribute;
+      pos_attribute.Init(
+          draco::GeometryAttribute::POSITION, &pos_norm_data_buffer, 3,
+          draco::DT_FLOAT32, false, sizeof(igasset::PositionNormalVertexData3D),
+          offsetof(igasset::PositionNormalVertexData3D, Position));
+      pos_attribute_idx =
+          draco_mesh.AddAttribute(pos_attribute, true, pos_norm_data.size());
+      if (pos_attribute_idx < 0) {
+        log->error("Failed to set up Draco position attribute for {}",
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::EncodingFailure;
+      }
+    }
 
-            for (int i = 0; i < action->assimp_mesh_names()->size(); i++) {
-              std::string mesh_name =
-                  action->assimp_mesh_names()->Get(i)->str();
+    // Normal attribute
+    {
+      draco::GeometryAttribute normal_attribute;
+      normal_attribute.Init(
+          draco::GeometryAttribute::NORMAL, &pos_norm_data_buffer, 3,
+          draco::DT_FLOAT32, false, sizeof(igasset::PositionNormalVertexData3D),
+          offsetof(igasset::PositionNormalVertexData3D, Normal));
+      normal_attribute_idx =
+          draco_mesh.AddAttribute(normal_attribute, true, pos_norm_data.size());
+      if (normal_attribute_idx < 0) {
+        log->error("Failed to set up Draco normal attribute for {}",
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::EncodingFailure;
+      }
+    }
 
-              auto mesh_result =
-                  ::load_mesh_from_scene(assimp_scene, mesh_name);
-              if (mesh_result.mesh == nullptr) {
-                log->error("Mesh {} not found in scene for {}", mesh_name,
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::UnexpectedModelDataError;
-              }
+    // Set mappings...
+    for (uint32_t i = 0u; i < pos_norm_data.size(); i++) {
+      draco_mesh.attribute(pos_attribute_idx)
+          ->SetAttributeValue(draco::AttributeValueIndex(i),
+                              &pos_norm_data[i].Position);
+      draco_mesh.attribute(normal_attribute_idx)
+          ->SetAttributeValue(draco::AttributeValueIndex(i),
+                              &pos_norm_data[i].Normal);
+    }
 
-              auto geo_data = ::extract_base_geo(mesh_result, log);
-              if (geo_data == nullptr) {
-                log->error(
-                    "Failed to extract relevant static geo data for {} -- {}",
-                    action->output_file_path()->str(), mesh_name);
-                return LoadAssimpFileAltResult::UnexpectedModelDataError;
-              }
-              for (int j = 0; j < geo_data->posNormData.size(); j++) {
-                pos_norm_data.push_back(geo_data->posNormData[j]);
-              }
-              for (int j = 0; j < geo_data->tbData.size(); j++) {
-                tb_data.push_back(geo_data->tbData[j]);
-              }
-              for (int j = 0; j < geo_data->texcoordData.size(); j++) {
-                texcoord_data.push_back(geo_data->texcoordData[j]);
-              }
-              for (int j = 0; j < geo_data->boneWeightsData.size(); j++) {
-                bone_data.push_back(geo_data->boneWeightsData[j]);
-              }
-              for (int j = 0; j < geo_data->indexData.size(); j++) {
-                index_data.push_back(geo_data->indexData[j] + index_offset);
-              }
-              index_offset += mesh_result.mesh->mNumVertices;
+    if (action->include_tangent_bitangents()) {
+      draco::DataBuffer tb_data_buffer;
+      tb_data_buffer.Update(
+          &tb_data[0],
+          tb_data.size() * sizeof(igasset::TangentBitangentVertexData3D));
+      {
+        draco::GeometryAttribute tangent_attribute;
+        tangent_attribute.Init(
+            draco::GeometryAttribute::GENERIC, &tb_data_buffer, 3,
+            draco::DT_FLOAT32, false,
+            sizeof(igasset::TangentBitangentVertexData3D),
+            offsetof(igasset::TangentBitangentVertexData3D, Tangent));
+        tangent_attribute_idx =
+            draco_mesh.AddAttribute(tangent_attribute, true, tb_data.size());
+        if (tangent_attribute_idx < 0) {
+          log->error("Failed to set up Draco tangent attribute for {}",
+                     action->output_file_path()->str());
+          return LoadAssimpFileAltResult::EncodingFailure;
+        }
+      }
 
-              if (i == 0) {
-                bone_meta = geo_data->boneMetadata;
-              } else {
-                if (bone_meta.size() != geo_data->boneMetadata.size()) {
-                  log->error(
-                      "Bone metadata mismatch, cannot extract bone bindings "
-                      "for {}",
-                      mesh_name);
-                  return LoadAssimpFileAltResult::UnexpectedModelDataError;
-                }
-                for (int j = 0; j < geo_data->boneMetadata.size(); j++) {
-                  if (bone_meta[j].name != geo_data->boneMetadata[j].name) {
-                    log->error(
-                        "Bone name mismatch in mesh {} at bone {} (expected "
-                        "{})",
-                        mesh_name, geo_data->boneMetadata[j].name,
-                        bone_meta[j].name);
-                    return LoadAssimpFileAltResult::UnexpectedModelDataError;
-                  }
-                }
-              }
-            }
+      {
+        draco::GeometryAttribute bitangent_attribute;
+        bitangent_attribute.Init(
+            draco::GeometryAttribute::GENERIC, &tb_data_buffer, 3,
+            draco::DT_FLOAT32, false,
+            sizeof(igasset::TangentBitangentVertexData3D),
+            offsetof(igasset::TangentBitangentVertexData3D, Bitangent));
+        bitangent_attribute_idx =
+            draco_mesh.AddAttribute(bitangent_attribute, true, tb_data.size());
+        if (bitangent_attribute_idx < 0) {
+          log->error("Failed to set up Draco bitangent attribute for {}",
+                     action->output_file_path()->str());
+          return LoadAssimpFileAltResult::EncodingFailure;
+        }
+      }
+    }
 
-            if (index_data.size() % 3 != 0) {
-              log->error("Invalid number of triangle indices {} for {}",
-                         index_data.size(), action->output_file_path()->str());
-              return LoadAssimpFileAltResult::UnexpectedModelDataError;
-            }
+    // texcoord attribute
+    if (has_texcoords && action->include_texcoords()) {
+      draco::DataBuffer texcoord_databuffer;
+      texcoord_databuffer.Update(
+          &texcoord_data[0],
+          texcoord_data.size() * sizeof(igasset::TexcoordVertexData));
 
-            if (index_data.size() == 0) {
-              log->error("No faces found for {}",
-                         action->output_file_path()->str());
-              return LoadAssimpFileAltResult::UnexpectedModelDataError;
-            }
+      draco::GeometryAttribute uv_attribute;
+      uv_attribute.Init(draco::GeometryAttribute::TEX_COORD,
+                        &texcoord_databuffer, 2, draco::DT_FLOAT32, false,
+                        sizeof(igasset::TexcoordVertexData),
+                        offsetof(igasset::TexcoordVertexData, Texcoord));
 
-            //
-            // Draco encoding...
-            draco::Mesh draco_mesh;
-            draco_mesh.set_num_points(pos_norm_data.size());
+      texcoord_attribute_idx =
+          draco_mesh.AddAttribute(uv_attribute, true, texcoord_data.size());
+      for (int i = 0; i < texcoord_data.size(); i++) {
+        draco_mesh.attribute(texcoord_attribute_idx)
+            ->SetAttributeValue(draco::AttributeValueIndex(i),
+                                &texcoord_data[i].Texcoord);
+      }
+      if (texcoord_attribute_idx < 0) {
+        log->error("Failed to set up Draco texcoord attribute for {}",
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::EncodingFailure;
+      }
+    }
 
-            draco::DataBuffer pos_norm_data_buffer;
-            pos_norm_data_buffer.Update(
-                &pos_norm_data[0],
-                pos_norm_data.size() *
-                    sizeof(igasset::PositionNormalVertexData3D));
+    if (has_bones && action->include_bones()) {
+      draco::DataBuffer bone_data_buffer;
+      bone_data_buffer.Update(
+          &bone_data[0],
+          bone_data.size() * sizeof(igasset::BoneWeightsVertexData));
 
-            int pos_attribute_idx = -1;
-            int normal_attribute_idx = -1;
-            int tangent_attribute_idx = -1;
-            int bitangent_attribute_idx = -1;
-            int texcoord_attribute_idx = -1;
-            int bone_idx_attrib_idx = -1;
-            int bone_weight_attrib_idx = -1;
+      draco::GeometryAttribute bone_idx_attrib;
+      bone_idx_attrib.Init(draco::GeometryAttribute::GENERIC, &bone_data_buffer,
+                           4, draco::DT_UINT8, false,
+                           sizeof(igasset::BoneWeightsVertexData),
+                           offsetof(igasset::BoneWeightsVertexData, Indices));
 
-            // Position attribute
-            {
-              draco::GeometryAttribute pos_attribute;
-              pos_attribute.Init(
-                  draco::GeometryAttribute::POSITION, &pos_norm_data_buffer, 3,
-                  draco::DT_FLOAT32, false,
-                  sizeof(igasset::PositionNormalVertexData3D),
-                  offsetof(igasset::PositionNormalVertexData3D, Position));
-              pos_attribute_idx = draco_mesh.AddAttribute(pos_attribute, true,
-                                                          pos_norm_data.size());
-              if (pos_attribute_idx < 0) {
-                log->error("Failed to set up Draco position attribute for {}",
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::EncodingFailure;
-              }
-            }
+      bone_idx_attrib_idx =
+          draco_mesh.AddAttribute(bone_idx_attrib, true, bone_data.size());
 
-            // Normal attribute
-            {
-              draco::GeometryAttribute normal_attribute;
-              normal_attribute.Init(
-                  draco::GeometryAttribute::NORMAL, &pos_norm_data_buffer, 3,
-                  draco::DT_FLOAT32, false,
-                  sizeof(igasset::PositionNormalVertexData3D),
-                  offsetof(igasset::PositionNormalVertexData3D, Normal));
-              normal_attribute_idx = draco_mesh.AddAttribute(
-                  normal_attribute, true, pos_norm_data.size());
-              if (normal_attribute_idx < 0) {
-                log->error("Failed to set up Draco normal attribute for {}",
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::EncodingFailure;
-              }
-            }
+      draco::GeometryAttribute bone_weight_attrib;
+      bone_weight_attrib.Init(
+          draco::GeometryAttribute::GENERIC, &bone_data_buffer, 4,
+          draco::DT_FLOAT32, false, sizeof(igasset::BoneWeightsVertexData),
+          offsetof(igasset::BoneWeightsVertexData, Weights));
 
-            // Set mappings...
-            for (uint32_t i = 0u; i < pos_norm_data.size(); i++) {
-              draco_mesh.attribute(pos_attribute_idx)
-                  ->SetAttributeValue(draco::AttributeValueIndex(i),
-                                      &pos_norm_data[i].Position);
-              draco_mesh.attribute(normal_attribute_idx)
-                  ->SetAttributeValue(draco::AttributeValueIndex(i),
-                                      &pos_norm_data[i].Normal);
-            }
+      bone_weight_attrib_idx =
+          draco_mesh.AddAttribute(bone_weight_attrib, true, bone_data.size());
 
-            if (action->include_tangent_bitangents()) {
-              draco::DataBuffer tb_data_buffer;
-              tb_data_buffer.Update(
-                  &tb_data[0],
-                  tb_data.size() *
-                      sizeof(igasset::TangentBitangentVertexData3D));
-              {
-                draco::GeometryAttribute tangent_attribute;
-                tangent_attribute.Init(
-                    draco::GeometryAttribute::GENERIC, &tb_data_buffer, 3,
-                    draco::DT_FLOAT32, false,
-                    sizeof(igasset::TangentBitangentVertexData3D),
-                    offsetof(igasset::TangentBitangentVertexData3D, Tangent));
-                tangent_attribute_idx = draco_mesh.AddAttribute(
-                    tangent_attribute, true, tb_data.size());
-                if (tangent_attribute_idx < 0) {
-                  log->error("Failed to set up Draco tangent attribute for {}",
-                             action->output_file_path()->str());
-                  return LoadAssimpFileAltResult::EncodingFailure;
-                }
-              }
+      for (int i = 0; i < bone_data.size(); i++) {
+        draco_mesh.attribute(bone_idx_attrib_idx)
+            ->SetAttributeValue(draco::AttributeValueIndex(i),
+                                &bone_data[i].Indices);
+        draco_mesh.attribute(bone_weight_attrib_idx)
+            ->SetAttributeValue(draco::AttributeValueIndex(i),
+                                &bone_data[i].Weights);
+      }
 
-              {
-                draco::GeometryAttribute bitangent_attribute;
-                bitangent_attribute.Init(
-                    draco::GeometryAttribute::GENERIC, &tb_data_buffer, 3,
-                    draco::DT_FLOAT32, false,
-                    sizeof(igasset::TangentBitangentVertexData3D),
-                    offsetof(igasset::TangentBitangentVertexData3D, Bitangent));
-                bitangent_attribute_idx = draco_mesh.AddAttribute(
-                    bitangent_attribute, true, tb_data.size());
-                if (bitangent_attribute_idx < 0) {
-                  log->error(
-                      "Failed to set up Draco bitangent attribute for {}",
-                      action->output_file_path()->str());
-                  return LoadAssimpFileAltResult::EncodingFailure;
-                }
-              }
-            }
+      if (bone_idx_attrib_idx < 0) {
+        log->error("Failed to set up Draco bone idx attribute for {}",
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::EncodingFailure;
+      }
+      if (bone_weight_attrib_idx < 0) {
+        log->error("Failed to set up Draco bone weight attribute for {}",
+                   action->output_file_path()->str());
+        return LoadAssimpFileAltResult::EncodingFailure;
+      }
+    }
 
-            // texcoord attribute
-            if (has_texcoords && action->include_texcoords()) {
-              draco::DataBuffer texcoord_databuffer;
-              texcoord_databuffer.Update(
-                  &texcoord_data[0],
-                  texcoord_data.size() * sizeof(igasset::TexcoordVertexData));
-
-              draco::GeometryAttribute uv_attribute;
-              uv_attribute.Init(
-                  draco::GeometryAttribute::TEX_COORD, &texcoord_databuffer, 2,
-                  draco::DT_FLOAT32, false, sizeof(igasset::TexcoordVertexData),
-                  offsetof(igasset::TexcoordVertexData, Texcoord));
-
-              texcoord_attribute_idx = draco_mesh.AddAttribute(
-                  uv_attribute, true, texcoord_data.size());
-              for (int i = 0; i < texcoord_data.size(); i++) {
-                draco_mesh.attribute(texcoord_attribute_idx)
-                    ->SetAttributeValue(draco::AttributeValueIndex(i),
-                                        &texcoord_data[i].Texcoord);
-              }
-              if (texcoord_attribute_idx < 0) {
-                log->error("Failed to set up Draco texcoord attribute for {}",
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::EncodingFailure;
-              }
-            }
-
-            if (has_bones && action->include_bones()) {
-              draco::DataBuffer bone_data_buffer;
-              bone_data_buffer.Update(
-                  &bone_data[0],
-                  bone_data.size() * sizeof(igasset::BoneWeightsVertexData));
-
-              draco::GeometryAttribute bone_idx_attrib;
-              bone_idx_attrib.Init(
-                  draco::GeometryAttribute::GENERIC, &bone_data_buffer, 4,
-                  draco::DT_UINT8, false,
-                  sizeof(igasset::BoneWeightsVertexData),
-                  offsetof(igasset::BoneWeightsVertexData, Indices));
-
-              bone_idx_attrib_idx = draco_mesh.AddAttribute(
-                  bone_idx_attrib, true, bone_data.size());
-
-              draco::GeometryAttribute bone_weight_attrib;
-              bone_weight_attrib.Init(
-                  draco::GeometryAttribute::GENERIC, &bone_data_buffer, 4,
-                  draco::DT_FLOAT32, false,
-                  sizeof(igasset::BoneWeightsVertexData),
-                  offsetof(igasset::BoneWeightsVertexData, Weights));
-
-              bone_weight_attrib_idx = draco_mesh.AddAttribute(
-                  bone_weight_attrib, true, bone_data.size());
-
-              for (int i = 0; i < bone_data.size(); i++) {
-                draco_mesh.attribute(bone_idx_attrib_idx)
-                    ->SetAttributeValue(draco::AttributeValueIndex(i),
-                                        &bone_data[i].Indices);
-                draco_mesh.attribute(bone_weight_attrib_idx)
-                    ->SetAttributeValue(draco::AttributeValueIndex(i),
-                                        &bone_data[i].Weights);
-              }
-
-              if (bone_idx_attrib_idx < 0) {
-                log->error("Failed to set up Draco bone idx attribute for {}",
-                           action->output_file_path()->str());
-                return LoadAssimpFileAltResult::EncodingFailure;
-              }
-              if (bone_weight_attrib_idx < 0) {
-                log->error(
-                    "Failed to set up Draco bone weight attribute for {}",
-                    action->output_file_path()->str());
-                return LoadAssimpFileAltResult::EncodingFailure;
-              }
-            }
-
-            // faces
-            draco_mesh.SetNumFaces(index_data.size() / 3);
-            for (int i = 0; i < index_data.size() / 3; i++) {
-              draco::Mesh::Face face;
-              face[0] = index_data[i * 3];
-              face[1] = index_data[i * 3 + 1];
-              face[2] = index_data[i * 3 + 2];
-              draco_mesh.SetFace(draco::FaceIndex(i), face);
-            }
+    // faces
+    draco_mesh.SetNumFaces(index_data.size() / 3);
+    for (int i = 0; i < index_data.size() / 3; i++) {
+      draco::Mesh::Face face;
+      face[0] = index_data[i * 3];
+      face[1] = index_data[i * 3 + 1];
+      face[2] = index_data[i * 3 + 2];
+      draco_mesh.SetFace(draco::FaceIndex(i), face);
+    }
 
 #ifdef DRACO_ATTRIBUTE_VALUES_DEDUPLICATION_SUPPORTED
-            draco_mesh.DeduplicateAttributeValues();
+    draco_mesh.DeduplicateAttributeValues();
 #endif
 #ifdef DRACO_ATTRIBUTE_INDICES_DEDUPLICATION_SUPPORTED
-            draco_mesh.DeduplicatePointIds();
+    draco_mesh.DeduplicatePointIds();
 #endif
 
-            draco::Encoder encoder;
-            // draco_params is optional in the FlatBuffers schema; use defaults
-            // matching DracoCompressionParams in igasset-gen-plan.fbs when
-            // null.
-            uint8_t compression_level = 10;
-            uint8_t decompression_level = 10;
-            uint8_t general_quantization = 11;
-            uint8_t pos_quantization = 11;
-            uint8_t normal_quantization = 11;
-            uint8_t texcoord_quantization = 11;
-            if (action->draco_params() != nullptr) {
-              compression_level = action->draco_params()->compression_level();
-              decompression_level =
-                  action->draco_params()->decompression_level();
-              general_quantization =
-                  action->draco_params()->general_quantization();
-              pos_quantization = action->draco_params()->pos_quantization();
-              normal_quantization =
-                  action->draco_params()->normal_quantization();
-              texcoord_quantization =
-                  action->draco_params()->texcoord_quantization();
-            }
+    draco::Encoder encoder;
+    // draco_params is optional in the FlatBuffers schema; use defaults
+    // matching DracoCompressionParams in igasset-gen-plan.fbs when
+    // null.
+    uint8_t compression_level = 10;
+    uint8_t decompression_level = 10;
+    uint8_t general_quantization = 11;
+    uint8_t pos_quantization = 11;
+    uint8_t normal_quantization = 11;
+    uint8_t texcoord_quantization = 11;
+    if (action->draco_params() != nullptr) {
+      compression_level = action->draco_params()->compression_level();
+      decompression_level = action->draco_params()->decompression_level();
+      general_quantization = action->draco_params()->general_quantization();
+      pos_quantization = action->draco_params()->pos_quantization();
+      normal_quantization = action->draco_params()->normal_quantization();
+      texcoord_quantization = action->draco_params()->texcoord_quantization();
+    }
 
-            int encoding_speed =
-                std::min(10, std::max(0, 10 - compression_level));
-            int decoding_speed =
-                std::min(10, std::max(0, 10 - decompression_level));
+    int encoding_speed = std::min(10, std::max(0, 10 - compression_level));
+    int decoding_speed = std::min(10, std::max(0, 10 - decompression_level));
 
-            encoder.SetSpeedOptions(encoding_speed, decoding_speed);
-            encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION,
-                                             pos_quantization);
-            encoder.SetAttributeQuantization(
-                draco::GeometryAttribute::TEX_COORD, texcoord_quantization);
-            encoder.SetAttributeQuantization(draco::GeometryAttribute::GENERIC,
-                                             general_quantization);
-            encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL,
-                                             normal_quantization);
+    encoder.SetSpeedOptions(encoding_speed, decoding_speed);
+    encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION,
+                                     pos_quantization);
+    encoder.SetAttributeQuantization(draco::GeometryAttribute::TEX_COORD,
+                                     texcoord_quantization);
+    encoder.SetAttributeQuantization(draco::GeometryAttribute::GENERIC,
+                                     general_quantization);
+    encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL,
+                                     normal_quantization);
 
-            draco::EncoderBuffer out_buffer;
-            auto status = encoder.EncodeMeshToBuffer(draco_mesh, &out_buffer);
-            if (!status.ok()) {
-              log->error("Failure in Draco encoder for {}: {}",
-                         action->output_file_path()->str(),
-                         status.error_msg_string());
-              return LoadAssimpFileAltResult::EncodingFailure;
-            }
+    draco::EncoderBuffer out_buffer;
+    auto status = encoder.EncodeMeshToBuffer(draco_mesh, &out_buffer);
+    if (!status.ok()) {
+      log->error("Failure in Draco encoder for {}: {}",
+                 action->output_file_path()->str(), status.error_msg_string());
+      return LoadAssimpFileAltResult::EncodingFailure;
+    }
 
-            //
-            // Encode to igasset FlatBuffer
-            auto fbb = std::make_shared<flatbuffers::FlatBufferBuilder>();
+    //
+    // Encode to igasset FlatBuffer
+    auto fbb = std::make_shared<flatbuffers::FlatBufferBuilder>();
 
-            auto index_type = (index_offset >= 0xFFFF)
-                                  ? IgAsset::IndexFormat_Uint16
-                                  : IgAsset::IndexFormat_Uint32;
+    auto index_type = (index_offset >= 0xFFFF) ? IgAsset::IndexFormat_Uint16
+                                               : IgAsset::IndexFormat_Uint32;
 
-            auto fb_draco_bin = fbb->CreateVector(
-                reinterpret_cast<const uint8_t*>(out_buffer.data()),
-                out_buffer.size());
-            std::vector<flatbuffers::Offset<flatbuffers::String>> fb_bone_names;
-            std::vector<flatbuffers::Offset<IgAsset::Mat4>> fb_inv_bind_poses;
-            for (int i = 0; i < bone_meta.size(); i++) {
-              fb_bone_names.push_back(fbb->CreateString(bone_meta[i].name));
-              auto fb_inv_bind_pose_vec = fbb->CreateVector(
-                  &bone_meta[i].invBindPose[0][0], 16 * sizeof(float));
-              auto fb_inv_bind_pose_mat4 =
-                  IgAsset::CreateMat4(*fbb, fb_inv_bind_pose_vec);
-              fb_inv_bind_poses.push_back(fb_inv_bind_pose_mat4);
-            }
+    auto fb_draco_bin = fbb->CreateVector(
+        reinterpret_cast<const uint8_t*>(out_buffer.data()), out_buffer.size());
+    std::vector<flatbuffers::Offset<flatbuffers::String>> fb_bone_names;
+    std::vector<flatbuffers::Offset<IgAsset::Mat4>> fb_inv_bind_poses;
+    for (int i = 0; i < bone_meta.size(); i++) {
+      fb_bone_names.push_back(fbb->CreateString(bone_meta[i].name));
+      auto fb_inv_bind_pose_vec = fbb->CreateVector(
+          &bone_meta[i].invBindPose[0][0], 16 * sizeof(float));
+      auto fb_inv_bind_pose_mat4 =
+          IgAsset::CreateMat4(*fbb, fb_inv_bind_pose_vec);
+      fb_inv_bind_poses.push_back(fb_inv_bind_pose_mat4);
+    }
 
-            auto fb_ozz_bone_names = fbb->CreateVector(fb_bone_names);
-            auto fb_ozz_inv_bind_poses = fbb->CreateVector(fb_inv_bind_poses);
+    auto fb_ozz_bone_names = fbb->CreateVector(fb_bone_names);
+    auto fb_ozz_inv_bind_poses = fbb->CreateVector(fb_inv_bind_poses);
 
-            auto fb_draco_geo = IgAsset::CreateDracoGeometry(
-                *fbb, pos_attribute_idx, normal_attribute_idx,
-                tangent_attribute_idx, bitangent_attribute_idx,
-                texcoord_attribute_idx, bone_idx_attrib_idx,
-                bone_weight_attrib_idx, fb_draco_bin, index_type,
-                fb_ozz_bone_names, fb_ozz_inv_bind_poses);
+    auto fb_draco_geo = IgAsset::CreateDracoGeometry(
+        *fbb, pos_attribute_idx, normal_attribute_idx, tangent_attribute_idx,
+        bitangent_attribute_idx, texcoord_attribute_idx, bone_idx_attrib_idx,
+        bone_weight_attrib_idx, fb_draco_bin, index_type, fb_ozz_bone_names,
+        fb_ozz_inv_bind_poses);
 
-            auto asset = IgAsset::CreateAsset(
-                *fbb, IgAsset::SingleAssetData_DracoGeometry,
-                fb_draco_geo.Union());
+    auto asset = IgAsset::CreateAsset(
+        *fbb, IgAsset::SingleAssetData_DracoGeometry, fb_draco_geo.Union());
 
-            fbb->Finish(asset);
-            return fbb;
-          },
-          exec_task_list_)
-      ->then_consuming(
-          [config = config_, log = log_, action, filesystem = filesystem_](
-              std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
-                           LoadAssimpFileAltResult>
-                  process_result) -> bool {
-            if (std::holds_alternative<LoadAssimpFileAltResult>(
-                    process_result)) {
-              switch (std::get<LoadAssimpFileAltResult>(process_result)) {
-                case LoadAssimpFileAltResult::UseCached:
-                  return true;
-                default:
-                  return false;
-              }
-            }
+    fbb->Finish(asset);
+    return fbb;
+  };
 
-            std::shared_ptr<flatbuffers::FlatBufferBuilder> draco_igasset_bin =
-                std::get<std::shared_ptr<flatbuffers::FlatBufferBuilder>>(
-                    std::move(process_result));
+  return exec_task_list_->run(
+      [this, action, input_file_path, process = std::move(process)]() -> bool {
+        std::vector<std::filesystem::path> input_paths;
+        input_paths.push_back(input_file_path);
+        if (skip_rebuild(
+                config_, std::move(input_paths),
+                config_.IgassetPathRoot / action->output_file_path()->str(),
+                log_)) {
+          return true;
+        }
 
-            return filesystem->write_bin(
-                config.IgassetPathRoot / action->output_file_path()->str(),
-                *draco_igasset_bin);
-          },
-          io_task_list_);
+        auto rsl = filesystem_->read_bin(input_file_path);
+        if (!rsl.has_value()) {
+          // read_bin logs the failure on error
+          return false;
+        }
+        if (rsl->empty()) {
+          log_->error("Input file {} is empty", input_file_path.string());
+          return false;
+        }
 
-  return nullptr;
+        auto process_result = process();
+        if (std::holds_alternative<LoadAssimpFileAltResult>(process_result)) {
+          switch (std::get<LoadAssimpFileAltResult>(process_result)) {
+            case LoadAssimpFileAltResult::UseCached:
+              return true;
+            default:
+              return false;
+          }
+        }
+
+        std::shared_ptr<flatbuffers::FlatBufferBuilder> draco_igasset_bin =
+            std::get<std::shared_ptr<flatbuffers::FlatBufferBuilder>>(
+                std::move(process_result));
+
+        return filesystem_->write_bin(
+            config_.IgassetPathRoot / action->output_file_path()->str(),
+            *draco_igasset_bin);
+      });
 }
 
 }  // namespace igassetgen

@@ -8,8 +8,8 @@
 
 #include <flatbuffers/idl.h>
 #include <igasset-gen/igasset-generator.h>
-#include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasset-gen/schema/igasset-gen-plan-embedded.h>
+#include <igasset-gen/schema/igasset-gen-plan.h>
 #include <igasync/promise_combiner.h>
 #include <igasync/task_list.h>
 #include <igasync/thread_pool.h>
@@ -177,33 +177,21 @@ int main(int argc, char** argv) {
   config.CleanBuild = clean_build;
 
   //
-  // Set up thread pools for I/O and processing
-  igasync::TaskList::Desc io_task_list_desc{};
-  io_task_list_desc.QueueSizeHint = 16;
-  io_task_list_desc.EnqueueListenerSizeHint = 1;
-
+  // Compute thread pool for processing individual assets.
   igasync::TaskList::Desc exec_task_list_desc{};
   exec_task_list_desc.QueueSizeHint = 32;
   exec_task_list_desc.EnqueueListenerSizeHint = 1;
 
-  auto io_task_list = igasync::TaskList::Create(io_task_list_desc);
   auto exec_task_list = igasync::TaskList::Create(exec_task_list_desc);
 
   // Kept here for scope!
-  std::shared_ptr<igasync::ThreadPool> io_thread_pool = nullptr;
   std::shared_ptr<igasync::ThreadPool> exec_thread_pool = nullptr;
   if (!single_threaded) {
-    igasync::ThreadPool::Desc io_thread_pool_desc{};
-    io_thread_pool_desc.UseHardwareConcurrency = false;
-    io_thread_pool_desc.AdditionalThreads = 2;
-
     igasync::ThreadPool::Desc exec_thread_pool_desc{};
     exec_thread_pool_desc.UseHardwareConcurrency = true;
     exec_thread_pool_desc.AdditionalThreads = 0;
 
-    io_thread_pool = igasync::ThreadPool::Create(io_thread_pool_desc);
     exec_thread_pool = igasync::ThreadPool::Create(exec_thread_pool_desc);
-    io_thread_pool->add_task_list(io_task_list);
     exec_thread_pool->add_task_list(exec_task_list);
   }
 
@@ -211,10 +199,9 @@ int main(int argc, char** argv) {
   // Kick off igasset generation
   log->info("Starting IgAsset generation for {} assets...",
             igasset_gen_plan->actions()->size());
-  auto filesystem =
-      std::make_shared<toolutils::Filesystem>(log, io_task_list);
-  igassetgen::IgassetGenerator generator(log, config, io_task_list,
-                                         exec_task_list, filesystem);
+  auto filesystem = std::make_shared<toolutils::Filesystem>(log);
+  igassetgen::IgassetGenerator generator(log, config, exec_task_list,
+                                         filesystem);
 
   auto igasset_combiner = igasync::PromiseCombiner::Create();
   bool igassets_finished = false;
@@ -245,10 +232,6 @@ int main(int argc, char** argv) {
   //
   // Spin on exec_task_list from the main thread until all tasks are finished
   while (!igassets_finished) {
-    if (single_threaded) {
-      while (io_task_list->execute_next());
-    }
-
     exec_task_list->execute_next();
   }
 

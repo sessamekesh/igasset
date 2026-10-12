@@ -94,6 +94,14 @@ class StagedFilesystem {
     return manifest_;
   }
 
+  // The physical input root (direct: the trusted input root; staged: the
+  // per-job staging directory holding the UUID-named files). Needed by
+  // callers that construct Assimp IOSystem adapters alongside this
+  // filesystem.
+  const std::filesystem::path& input_root() const {
+    return input_root_;
+  }
+
  private:
   StagedFilesystem(IoPolicy policy, std::filesystem::path input_root,
                    std::filesystem::path output_root,

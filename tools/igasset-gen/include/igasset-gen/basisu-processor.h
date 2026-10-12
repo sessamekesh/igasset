@@ -11,7 +11,6 @@
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/spdlog.h>
-#include <tool-utils/filesystem.h>
 
 #include <memory>
 #include <variant>
@@ -22,12 +21,10 @@ class BasisuProcessor {
  public:
   BasisuProcessor(std::shared_ptr<spdlog::logger> log,
                   PlanInvocationConfig config,
-                  std::shared_ptr<igasync::TaskList> exec_task_list,
-                  std::shared_ptr<toolutils::Filesystem> filesystem)
+                  std::shared_ptr<igasync::TaskList> exec_task_list)
       : log_(log->clone("BasisuProcessor")),
         config_(config),
-        exec_task_list_(exec_task_list),
-        filesystem_(filesystem) {}
+        exec_task_list_(exec_task_list) {}
 
  public:
   //
@@ -68,7 +65,6 @@ class BasisuProcessor {
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
-  std::shared_ptr<toolutils::Filesystem> filesystem_;
 };
 
 }  // namespace igassetgen

@@ -8,6 +8,7 @@
 #include <mutex>
 #endif
 
+#include <cstring>
 #include <optional>
 #include <string>
 
@@ -19,20 +20,23 @@ static std::optional<Image2D> unpack_rgba8unorm(
     return std::nullopt;
   }
 
-  auto expected_format = Image2DFormat::RGBA8Unorm;
-
-  if (expected_format != format) {
+  // Uncompressed data has no compressed representation to transcode to, and
+  // all platforms support RGBA8Unorm - always return the raw data as
+  // RGBA8Unorm (issue #18); callers that need BC7/ASTC post-transform on
+  // their end (the returned Image2D reports its actual format).
+  if (format != Image2DFormat::RGBA8Unorm) {
     auto log = spdlog::default_logger()->clone("Image2D");
-    log->warn("Cannot unpack uncompressed data with mismatching formats");
-    return std::nullopt;
+    log->warn(
+        "Returning RGBA8Unorm data for a compressed-format request: the "
+        "stored image is uncompressed");
   }
 
   std::string raw_data(flatbuffer_data->data()->size(), '\0');
   memcpy(raw_data.data(), flatbuffer_data->data()->data(),
          flatbuffer_data->data()->size());
 
-  return Image2D(flatbuffer_data->width(), flatbuffer_data->height(), format,
-                 std::move(raw_data));
+  return Image2D(flatbuffer_data->width(), flatbuffer_data->height(),
+                 Image2DFormat::RGBA8Unorm, std::move(raw_data));
 }
 
 #if IGASSET_ENABLE_BASISU_SUPPORT

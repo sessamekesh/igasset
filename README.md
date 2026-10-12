@@ -15,9 +15,10 @@ Features:
     - Various supercompressed formats via [Basis Universal](https://github.com/binomialLLC/basis_universal)
   - WGSL shader source code - plain text
 - `igasset-gen` tool for creating assets from existing formats
-  - 3D geometry - anything supported by [Assimp](https://github.com/assimp/assimp) (most common 3D geometry formats)
+  - 3D geometry - FBX, glTF (1/2, incl. `.glb`), and OBJ via [Assimp](https://github.com/assimp/assimp)
   - Images - anything supported by [stbi_image](https://github.com/nothings/stb/blob/master/stb_image.h)
 - `igpack-bundle` tool for bundling existing `*.igasset` files into `*.igpack` bundles
+- `extract-asset-metadata` tool for inspecting one file and reporting what it is, how `igasset-gen` can consume it, and which other files it depends on (see [tools/extract-asset-metadata/README.md](tools/extract-asset-metadata/README.md))
 
 ## Building
 
@@ -26,6 +27,8 @@ There are three main CMake targets built:
 - `igasset` - static library, WebAssembly-compatible.
 - `igasset-gen` - binary (no WASM)
 - `igpack-bundle` - binary (no WASM)
+
+alongside the inspection utilities (`enumerate-igasset`, `enumerate-igpack`, `enumerate-assimp`, `extract-asset-metadata` - binaries, no WASM).
 
 To use the generation tools or the decoder library within a project, run a **native build** using a typical CMake workflow.
 
@@ -60,7 +63,6 @@ Example:
 igasset-gen                        \
   -i ./test_assets                 \
   -o ./bin/igassets                \
-  -s ./schema/igasset-gen-plan.fbs \
   --single-threaded                \
   ./tools/igasset-gen/test-definitions/copy-wgsl-source.igasset-gen.json
 ```
@@ -69,7 +71,7 @@ CLI options:
 
 - `-i, --input_asset_path_root` Root directory used to resolve input asset file paths.
 - `-o, --output_path_root` Root directory for generated `*.igasset` files.
-- `-s, --schema` Path to `igasset-gen-plan.fbs` (defaults to `igasset-gen-plan.fbs` in the working directory if omitted).
+- `-m, --manifest` Staged asset manifest (JSON). Present = every input read resolves through the manifest (deny-by-default for untrusted uploads); absent = direct local-file access. Setting `IGASSET_REQUIRE_MANIFEST` (any value other than `0`) makes an absent manifest a hard error.
 - `-c, --clean` Re-generate all outputs without cache reuse.
 - `--single-threaded` Run generation on the main thread (useful for debugging / deterministic troubleshooting).
 - `-l, --log_level` Log verbosity: `ERROR`, `WARN`, `DEBUG`, `INFO`, or `TRACE`.
@@ -107,15 +109,13 @@ Example:
 igpack-bundle                        \
   -i ./bin/igassets                  \
   -o ./build/out                     \
-  -s ./schema/igpack-bundle-plan.fbs \
-  ./tools/igpack-bundle/test-definitions/three-distinct-assets.igpack-bundle.json
+  ./tools/igpack-bundle/e2e/test-definitions/all-distinct-assets.igpack-bundle.json
 ```
 
 CLI options:
 
 - `-i, --input_asset_path_root` Root directory used to resolve input `igasset` file paths.
 - `-o, --output_path_root` Root directory for generated `*.igpack` files.
-- `-s, --schema` Path to `igpack-bundle-plan.fbs` (defaults to `igpack-bundle-plan.fbs` in the working directory if omitted).
 - `-c, --clean` Re-generate all outputs without cache reuse.
 - `-l, --log_level` Log verbosity: `ERROR`, `WARN`, `DEBUG`, `INFO`, or `TRACE`.
 
@@ -140,6 +140,28 @@ Igpack bundle generation plan files are written in JSON - see [schema/igpack-bun
 
 See [igpack-bundle E2E test-definitions folder](tools/igpack-bundle/e2e/test-definitions) for some examples.
 
+## `extract-asset-metadata` usage:
+
+`extract-asset-metadata` inspects one file (by content - file names carry no meaning for uploaded assets) and reports what it is, how `igasset-gen` can consume it, and which other files it depends on. Stdout only; see [tools/extract-asset-metadata/README.md](tools/extract-asset-metadata/README.md) for the full contract (modes, dependency statuses, exit codes).
+
+```bash
+extract-asset-metadata                \
+  --json                              \
+  --deep                              \
+  --manifest ./staging/manifest.json  \
+  --logical-name models/scene.gltf    \
+  ./staging/uuid-scene-gltf
+```
+
+CLI options:
+
+- `--json` Machine-readable JSON output (default: human-readable text).
+- `--deep` Full Assimp import (models only). Exposes the entire Assimp parser attack surface - only run in a sandbox.
+- `--manifest` Staged asset manifest (JSON). Present = staged policy (deny-by-default, manifest-only lookups); absent = direct policy.
+- `--logical-name` Logical name of the input (staged mode: needed for manifest lookups and Assimp's extension-based importer selection).
+- `--max-file-size` Refuse larger files before reading (default: 1 GiB).
+
+Exit codes: `0` inspected (including `kind: unknown`), `1` bad args / unreadable input, `2` too large, `3` `--deep` parse failure.
 
 ## `igasset` library usage:
 

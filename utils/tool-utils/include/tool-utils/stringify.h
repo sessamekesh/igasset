@@ -63,12 +63,16 @@ static void dump_wgsl_contents(const IgAsset::WgslSource* wgsl_source) {
   std::cout << "Source hash: "
             << picosha2::hash256_hex_string(wgsl_source->source()->str())
             << std::endl;
+  auto entry_point_str = [](const flatbuffers::String* entry_point) {
+    return entry_point != nullptr ? entry_point->str() : std::string();
+  };
   std::cout << "Vertex entry point: "
-            << wgsl_source->vertex_entry_point()->str() << std::endl;
+            << entry_point_str(wgsl_source->vertex_entry_point()) << std::endl;
   std::cout << "Fragment entry point: "
-            << wgsl_source->fragment_entry_point()->str() << std::endl;
+            << entry_point_str(wgsl_source->fragment_entry_point())
+            << std::endl;
   std::cout << "Compute entry point: "
-            << wgsl_source->compute_entry_point()->str() << std::endl;
+            << entry_point_str(wgsl_source->compute_entry_point()) << std::endl;
 }
 
 static void dump_spritesheet_contents(const IgAsset::Spritesheet* spritesheet) {

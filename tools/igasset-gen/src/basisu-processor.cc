@@ -148,34 +148,32 @@ bool BasisuProcessor::generate_single_output(
                                     fb_image2d.Union());
   fbb->Finish(asset);
 
-  return filesystem_->write_bin(
-      config_.IgassetPathRoot / output->output_file_path()->str(), *fbb);
+  return config_.StagedFs->write_output(output->output_file_path()->str(),
+                                        *fbb);
 }
 
 std::shared_ptr<igasync::Promise<bool>>
 BasisuProcessor::execute_image_to_texture2d(
     const IgAssetGen::ImageToTexture2DAction* action) const {
-  auto input_file_path =
-      config_.InputAssetPathRoot / action->input_file_path()->str();
+  const std::string logical_input = action->input_file_path()->str();
 
   log_->info("Processing ImageToTexture2DAction for input file {}",
-             input_file_path.string());
+             logical_input);
 
   return exec_task_list_
-      ->run([filesystem = filesystem_, log = log_,
-             input_file_path]() -> std::optional<StbImageData> {
+      ->run([staged_fs = config_.StagedFs, log = log_,
+             logical_input]() -> std::optional<StbImageData> {
         // TODO (kamaron): Check for cached output here and return
-        auto rsl = filesystem->read_bin(input_file_path);
+        auto rsl = staged_fs->read_input(logical_input);
         if (!rsl.has_value()) {
-          log->error("Failed to read file {}", input_file_path.string());
+          log->error("Failed to read file {}", logical_input);
           return std::nullopt;
         }
 
         return StbImageData::from_memory(*rsl);
       })
       ->then_chain_consuming(
-          [log = log_, input_file_path, action,
-           exec_task_list = exec_task_list_,
+          [log = log_, logical_input, action, exec_task_list = exec_task_list_,
            this](std::optional<StbImageData> rsl)
               -> std::shared_ptr<igasync::Promise<bool>> {
             if (!rsl.has_value()) {
@@ -237,13 +235,12 @@ BasisuProcessor::execute_generate_spritesheet(
     return igasync::Promise<bool>::Immediate(false);
   }
 
-  auto output_file_path = config_.IgassetPathRoot / fb_output_file_path->str();
+  const std::string logical_output = fb_output_file_path->str();
 
   auto output_image_opt = StbImageData::blank_rgba(
       fb_output_image->width(), fb_output_image->height(), background_rgba);
   if (!output_image_opt.has_value()) {
-    log_->error("Could not allocate new output image for {}",
-                output_file_path.string());
+    log_->error("Could not allocate new output image for {}", logical_output);
     return igasync::Promise<bool>::Immediate(false);
   }
 
@@ -254,12 +251,12 @@ BasisuProcessor::execute_generate_spritesheet(
   if (fb_sprites == nullptr) {
     log_->error(
         "No sprites provided for GenerateSpritesheet action {} - aborting",
-        output_file_path.string());
+        logical_output);
     return igasync::Promise<bool>::Immediate(false);
   }
 
   log_->info("Processing GenerateSpritesheet action (n={}) for output file {}",
-             fb_sprites->size(), output_file_path.string());
+             fb_sprites->size(), logical_output);
 
   // TODO (kamaron): Perform cache check here (OK to do on main thread, it's a
   //  quick check that skips a lot of work if it succeed)
@@ -272,7 +269,7 @@ BasisuProcessor::execute_generate_spritesheet(
   // The expensive part of spritesheet generation is the image encoding anyways
   //  if any sort of texture compression is used!
   return exec_task_list_->run([this, fb_sprites, fb_output_image, output_image,
-                               output_file_path]() -> bool {
+                               logical_output]() -> bool {
     for (auto* sprite : *fb_sprites) {
       auto fb_input_file_path = sprite->input_file_path();
       if (fb_input_file_path == nullptr) {
@@ -281,12 +278,11 @@ BasisuProcessor::execute_generate_spritesheet(
             "GenerateSpritesheet - aborting");
         return false;
       }
-      auto input_file_path =
-          config_.InputAssetPathRoot / fb_input_file_path->str();
+      const std::string logical_sprite_input = fb_input_file_path->str();
 
-      auto rsl = filesystem_->read_bin(input_file_path);
+      auto rsl = config_.StagedFs->read_input(logical_sprite_input);
       if (!rsl.has_value()) {
-        // read_bin logs the failure on error
+        // read_input logs the failure on error
         return false;
       }
 
@@ -294,7 +290,7 @@ BasisuProcessor::execute_generate_spritesheet(
       // the 4-channel blank_rgba canvas.
       auto sprite_opt = StbImageData::from_memory(*rsl, 4);
       if (!sprite_opt.has_value()) {
-        log_->error("Failed to read sprite from {}", input_file_path.string());
+        log_->error("Failed to read sprite from {}", logical_sprite_input);
         return false;
       }
 
@@ -303,7 +299,7 @@ BasisuProcessor::execute_generate_spritesheet(
         log_->error(
             "Missing 'sprite' location in SpriteSubAction for "
             "input {}",
-            input_file_path.string());
+            logical_sprite_input);
         return false;
       }
 
@@ -314,7 +310,7 @@ BasisuProcessor::execute_generate_spritesheet(
 
       if (dst_w <= 0 || dst_h <= 0) {
         log_->error("Invalid sprite dimensions {} x {} for input {}", dst_w,
-                    dst_h, input_file_path.string());
+                    dst_h, logical_sprite_input);
         return false;
       }
 
@@ -333,7 +329,7 @@ BasisuProcessor::execute_generate_spritesheet(
         cropped_opt = sprite_opt->crop(crop_x, crop_y, crop_w, crop_h);
         if (!cropped_opt.has_value()) {
           log_->error("Failed to crop sprite from {} at [{},{}] {}x{}",
-                      input_file_path.string(), crop_x, crop_y, crop_w, crop_h);
+                      logical_sprite_input, crop_x, crop_y, crop_w, crop_h);
           return false;
         }
         blit_src = &*cropped_opt;
@@ -341,7 +337,7 @@ BasisuProcessor::execute_generate_spritesheet(
 
       if (!output_image->blit(*blit_src, dst_x, dst_y, dst_w, dst_h)) {
         log_->error("Failed to blit sprite from {} to ({}, {})",
-                    input_file_path.string(), dst_x, dst_y);
+                    logical_sprite_input, dst_x, dst_y);
         return false;
       }
     }
@@ -361,7 +357,7 @@ BasisuProcessor::execute_generate_spritesheet(
         break;
       default:
         log_->error("Unexpected Image2DEncoding value for output {}",
-                    output_file_path.string());
+                    logical_output);
         return false;
     }
 
@@ -370,14 +366,14 @@ BasisuProcessor::execute_generate_spritesheet(
       switch (alt_rsl) {
         case BasisuProcessor::AltResult::UseCached:
           log_->info("Output {} is up to date, skipping generation",
-                     output_file_path.string());
+                     logical_output);
           return true;
         case BasisuProcessor::AltResult::FsErr:
         case BasisuProcessor::AltResult::InvalidOutputFormat:
-          log_->error("Error generating {}", output_file_path.string());
+          log_->error("Error generating {}", logical_output);
           return false;
         case BasisuProcessor::AltResult::CompressionFailure:
-          log_->error("Error compressing {}", output_file_path.string());
+          log_->error("Error compressing {}", logical_output);
           return false;
       }
     }
@@ -391,7 +387,7 @@ BasisuProcessor::execute_generate_spritesheet(
         log_->error(
             "Could not read "
             "GenerateSpritesheetAction::sprites[]::sprite in {}",
-            output_file_path.string());
+            logical_output);
         return false;
       }
 
@@ -401,7 +397,7 @@ BasisuProcessor::execute_generate_spritesheet(
             "Could not read "
             "GenerateSpritesheetAction::sprites[]::sprite::name in "
             "{}",
-            output_file_path.string());
+            logical_output);
         return false;
       }
 
@@ -422,7 +418,7 @@ BasisuProcessor::execute_generate_spritesheet(
         *fbb, IgAsset::SingleAssetData_Spritesheet, fb_out_spritesheet.Union());
     fbb->Finish(fb_out_asset);
 
-    return filesystem_->write_bin(output_file_path, *fbb);
+    return config_.StagedFs->write_output(logical_output, *fbb);
   });
 }
 
@@ -433,30 +429,49 @@ BasisuProcessor::rgba8_unorm_out(
     const StbImageData& img) const {
   flatbuffers::Offset<flatbuffers::Vector<uint8_t>> fb_data = 0;
 
-  if (img.num_channels == 4) {
-    fb_data =
-        fbb->CreateVector(img.data, img.width * img.height * img.num_channels);
-  } else {
-    std::vector<uint8_t> converted_data;
-    converted_data.reserve(img.width * img.height * 4);
+  const std::size_t pixel_count = static_cast<std::size_t>(img.width) *
+                                  static_cast<std::size_t>(img.height);
 
-    for (uint16_t row = 0; row < img.height; row++) {
-      for (uint16_t col = 0; col < img.width; col++) {
-        uint8_t* pixel_ptr =
-            img.data + (row * img.width + col) * img.num_channels;
-        converted_data.push_back(pixel_ptr[0]);
-        converted_data.push_back(pixel_ptr[1]);
-        converted_data.push_back(pixel_ptr[2]);
-        if (img.num_channels == 4) {
-          converted_data.push_back(pixel_ptr[3]);
-        } else {
-          converted_data.push_back(255);
+  if (img.num_channels == 4) {
+    fb_data = fbb->CreateVector(img.data, pixel_count * 4);
+  } else {
+    // Expand the source channels to RGBA. Only valid channels are read:
+    // grayscale (g,g,g,255), gray+alpha (g,g,g,a), RGB (r,g,b,255).
+    std::vector<uint8_t> converted_data;
+    converted_data.reserve(pixel_count * 4);
+
+    for (int row = 0; row < img.height; row++) {
+      for (int col = 0; col < img.width; col++) {
+        const uint8_t* pixel_ptr =
+            img.data + (static_cast<std::size_t>(row) * img.width + col) *
+                           img.num_channels;
+        uint8_t r = 0, g = 0, b = 0, a = 255;
+        switch (img.num_channels) {
+          case 1:
+            r = g = b = pixel_ptr[0];
+            a = 255;
+            break;
+          case 2:
+            r = g = b = pixel_ptr[0];
+            a = pixel_ptr[1];
+            break;
+          case 3:
+            r = pixel_ptr[0];
+            g = pixel_ptr[1];
+            b = pixel_ptr[2];
+            a = 255;
+            break;
+          default:
+            break;
         }
+        converted_data.push_back(r);
+        converted_data.push_back(g);
+        converted_data.push_back(b);
+        converted_data.push_back(a);
       }
     }
 
-    fb_data =
-        fbb->CreateVector(converted_data.data(), img.width * img.height * 4);
+    fb_data = fbb->CreateVector(converted_data.data(), pixel_count * 4);
   }
 
   return IgAsset::CreateImage2D(*fbb, IgAsset::Image2DEncoding_RGBA8Unorm,
@@ -517,9 +532,33 @@ BasisuProcessor::basisu_ldr_out(
   basisu::image img(data.width, data.height);
   for (uint32_t x = 0; x < data.width; x++) {
     for (uint32_t y = 0; y < data.height; y++) {
-      uint8_t* pixel_ptr = data.data + (y * data.width + x) * data.num_channels;
-      uint8_t a = data.num_channels == 4 ? pixel_ptr[3] : 255;
-      img(x, y).set(pixel_ptr[0], pixel_ptr[1], pixel_ptr[2], a);
+      const uint8_t* pixel_ptr =
+          data.data +
+          (static_cast<std::size_t>(y) * data.width + x) * data.num_channels;
+      uint8_t r = 0, g = 0, b = 0, a = 255;
+      switch (data.num_channels) {
+        case 1:
+          r = g = b = pixel_ptr[0];
+          a = 255;
+          break;
+        case 2:
+          r = g = b = pixel_ptr[0];
+          a = pixel_ptr[1];
+          break;
+        case 3:
+          r = pixel_ptr[0];
+          g = pixel_ptr[1];
+          b = pixel_ptr[2];
+          a = 255;
+          break;
+        default:
+          r = pixel_ptr[0];
+          g = pixel_ptr[1];
+          b = pixel_ptr[2];
+          a = pixel_ptr[3];
+          break;
+      }
+      img(x, y).set(r, g, b, a);
     }
   }
   basisu::vector<basisu::image> images;

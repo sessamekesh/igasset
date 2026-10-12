@@ -1,0 +1,18 @@
+{
+  "actions": [
+    {
+      "action_type": "ImageToTexture2DAction",
+      "action": {
+        "input_file_path": "gray-alpha.png",
+        "outputs": [
+          {
+            "output_file_path": "gray-alpha-rgba8.igasset",
+            "image_encoding": "RGBA8Unorm",
+            "width": 0,
+            "height": 0
+          }
+        ]
+      }
+    }
+  ]
+}

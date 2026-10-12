@@ -10,6 +10,7 @@ This module provides:
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,6 +84,7 @@ def run_igasset_gen(
     *,
     single_threaded: bool = True,
     extra_args: list[str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """
     Run igasset-gen with the given plan and return the CompletedProcess.
@@ -114,6 +116,7 @@ def run_igasset_gen(
         cmd,
         capture_output=True,
         text=True,
+        env=None if env is None else {**os.environ, **env},
     )
 
 

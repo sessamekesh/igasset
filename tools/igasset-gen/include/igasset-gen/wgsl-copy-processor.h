@@ -6,7 +6,6 @@
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
-#include <tool-utils/filesystem.h>
 
 #include <memory>
 
@@ -16,12 +15,10 @@ class WgslCopyProcessor {
  public:
   WgslCopyProcessor(std::shared_ptr<spdlog::logger> log,
                     PlanInvocationConfig config,
-                    std::shared_ptr<igasync::TaskList> exec_task_list,
-                    std::shared_ptr<toolutils::Filesystem> filesystem)
+                    std::shared_ptr<igasync::TaskList> exec_task_list)
       : log_(log->clone("WgslCopyProcessor")),
         config_(config),
-        exec_task_list_(exec_task_list),
-        filesystem_(filesystem) {}
+        exec_task_list_(exec_task_list) {}
   WgslCopyProcessor(const WgslCopyProcessor&) = delete;
   WgslCopyProcessor& operator=(const WgslCopyProcessor&) = delete;
   WgslCopyProcessor(WgslCopyProcessor&&) = default;
@@ -49,7 +46,6 @@ class WgslCopyProcessor {
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
-  std::shared_ptr<toolutils::Filesystem> filesystem_;
 };
 
 }  // namespace igassetgen

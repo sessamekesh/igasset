@@ -1,0 +1,24 @@
+{
+  "actions": [
+    {
+      "action_type": "CopyWgslSourceAction",
+      "action": {
+        "input_file_path": "models/copy-wgsl-source.wgsl",
+        "output_file_path": "wgsl/staged-copy-wgsl.igasset",
+        "vertex_entry_point": "vertex-main",
+        "fragment_entry_point": "fragment-main"
+      }
+    },
+    {
+      "action_type": "AssimpToDracoAction",
+      "action": {
+        "input_file_path": "models/triangle.obj",
+        "output_file_path": "geo/staged-triangle.igasset",
+        "assimp_mesh_names": [
+          "triangle"
+        ],
+        "include_texcoords": true
+      }
+    }
+  ]
+}

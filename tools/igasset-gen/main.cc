@@ -16,6 +16,8 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+#include <staged-asset-io/staged-asset-manifest.h>
+#include <staged-asset-io/staged-filesystem.h>
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
 
@@ -67,6 +69,18 @@ int main(int argc, char** argv) {
          "Path of the Indigo asset pack plan file (*.igasset-plan.json) "
          "that should be processed by this tool")
       ->required(true)
+      ->check(CLI::ExistingFile);
+
+  //
+  // Staged asset manifest (JSON). Present = staged policy (deny-by-default:
+  // input reads resolve through the manifest); absent = direct policy
+  // (trusted local files, historical behavior).
+  std::filesystem::path manifest_path;
+  app.add_option("-m,--manifest", manifest_path,
+                 "Staged asset manifest (JSON). Present = staged policy; "
+                 "absent = direct policy (fails if IGASSET_REQUIRE_MANIFEST "
+                 "is set)")
+      ->required(false)
       ->check(CLI::ExistingFile);
 
   //
@@ -172,9 +186,37 @@ int main(int argc, char** argv) {
 
   igassetgen::PlanInvocationConfig config{};
   config.PlanFileLastModified = plan_file_last_modified;
-  config.InputAssetPathRoot = input_path;
-  config.IgassetPathRoot = igasset_output_path;
   config.CleanBuild = clean_build;
+
+  std::shared_ptr<stagedio::StagedFilesystem> staged_fs = nullptr;
+  if (!manifest_path.empty()) {
+    auto manifest = stagedio::StagedAssetManifest::load(manifest_path, log);
+    if (manifest == nullptr) {
+      log->error("Failed to load staged asset manifest {}",
+                 manifest_path.string());
+      return EXIT_FAILURE;
+    }
+    staged_fs = stagedio::StagedFilesystem::staged(
+        input_path, igasset_output_path, manifest, log);
+  } else {
+    // Optional service-misconfiguration tripwire: when the env var is set
+    // to any value other than "0", refuse to run in direct mode.
+    const char* require_manifest = std::getenv("IGASSET_REQUIRE_MANIFEST");
+    if (require_manifest != nullptr && require_manifest[0] != '\0' &&
+        std::string_view(require_manifest) != "0") {
+      log->error(
+          "IGASSET_REQUIRE_MANIFEST is set, but no --manifest was provided - "
+          "refusing to run in direct mode");
+      return EXIT_FAILURE;
+    }
+    staged_fs = stagedio::StagedFilesystem::direct(input_path,
+                                                   igasset_output_path, log);
+  }
+  if (staged_fs == nullptr) {
+    log->error("Failed to construct the staged filesystem policy");
+    return EXIT_FAILURE;
+  }
+  config.StagedFs = staged_fs;
 
   //
   // Compute thread pool for processing individual assets.
@@ -199,9 +241,7 @@ int main(int argc, char** argv) {
   // Kick off igasset generation
   log->info("Starting IgAsset generation for {} assets...",
             igasset_gen_plan->actions()->size());
-  auto filesystem = std::make_shared<toolutils::Filesystem>(log);
-  igassetgen::IgassetGenerator generator(log, config, exec_task_list,
-                                         filesystem);
+  igassetgen::IgassetGenerator generator(log, config, exec_task_list);
 
   auto igasset_combiner = igasync::PromiseCombiner::Create();
   bool igassets_finished = false;

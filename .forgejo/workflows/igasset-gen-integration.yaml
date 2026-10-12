@@ -43,9 +43,13 @@ jobs:
           --target enumerate-igpack
           --target extract-asset-metadata
           --target staged-asset-io-selftest
+          --target igasset-selftest
 
       - name: Run staged-asset-io selftest
         run: build/tools/staged-asset-io/staged-asset-io-selftest
+
+      - name: Run igasset decoder selftest
+        run: build/igasset/igasset-selftest
 
       - name: Run igasset-gen Integration Tests
         env:

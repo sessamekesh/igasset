@@ -18,6 +18,10 @@
 #include <igasset/vertex_types.h>
 #include <igasync/promise.h>
 #include <staged-asset-io/assimp-import.h>
+#include <staged-asset-io/assimp-io-system.h>
+#include <staged-asset-io/file-access-journal.h>
+#include <staged-asset-io/reference-normalize.h>
+#include <staged-asset-io/staged-filesystem.h>
 
 #include <algorithm>
 #include <assimp/Importer.hpp>
@@ -265,22 +269,44 @@ AssimpGeoProcessor::draco_asset_from_assimp(
     return igasync::Promise<bool>::Immediate(false);
   }
 
-  auto input_file_path =
-      config_.InputAssetPathRoot / action->input_file_path()->str();
+  const std::string logical_input = action->input_file_path()->str();
+  const std::string logical_output = action->output_file_path()->str();
 
-  log_->info("Extracting DRACO assets from {}",
-             action->input_file_path()->str());
+  log_->info("Extracting DRACO assets from {}", logical_input);
 
   // The synchronous Assimp -> Draco encoding pipeline for this action: import
   // the scene via Assimp, validate + extract the requested meshes, encode the
   // combined geometry via Draco, and build the resulting igasset FlatBuffer.
   // Held as a local lambda so the (long) pipeline body stays colocated with
   // the exec task that drives it.
-  auto process = [action, input_file_path, log = log_]()
+  auto process = [action, logical_input, logical_output, config = config_,
+                  log = log_]()
       -> std::variant<std::shared_ptr<flatbuffers::FlatBufferBuilder>,
                       LoadAssimpFileAltResult> {
-    auto assimp_scene = stagedio::load_scene(
-        input_file_path, action->output_file_path()->str(), log);
+    const auto& staged_fs = config.StagedFs;
+    auto journal = std::make_shared<stagedio::FileAccessJournal>();
+
+    // Staged policy: import by LOGICAL name (Assimp selects importers by
+    // the extension of the path it is given) with every file access
+    // resolving through the manifest. Direct policy: import the physical
+    // path through the recording IOSystem (DefaultIOSystem semantics,
+    // with every open journaled for diagnostics).
+    std::shared_ptr<stagedio::AssimpSceneData> assimp_scene;
+    if (staged_fs->policy() == stagedio::IoPolicy::Staged) {
+      auto* io = new stagedio::AssimpStagedIOSystem(
+          staged_fs->input_root(), staged_fs->manifest(), journal, log,
+          std::string(stagedio::logical_parent_dir(logical_input)));
+      assimp_scene = stagedio::load_scene(std::filesystem::path(logical_input),
+                                          logical_output, log, io);
+    } else {
+      auto input_physical = staged_fs->resolve_input(logical_input);
+      if (!input_physical.has_value()) {
+        return LoadAssimpFileAltResult::FsErr;
+      }
+      auto* io = new stagedio::AssimpRecordingIOSystem(journal);
+      assimp_scene =
+          stagedio::load_scene(*input_physical, logical_output, log, io);
+    }
     if (assimp_scene == nullptr) {
       log->error("Could not load scene for {}",
                  action->output_file_path()->str());
@@ -675,45 +701,51 @@ AssimpGeoProcessor::draco_asset_from_assimp(
     return fbb;
   };
 
-  return exec_task_list_->run(
-      [this, action, input_file_path, process = std::move(process)]() -> bool {
-        std::vector<std::filesystem::path> input_paths;
-        input_paths.push_back(input_file_path);
-        if (skip_rebuild(
-                config_, std::move(input_paths),
-                config_.IgassetPathRoot / action->output_file_path()->str(),
-                log_)) {
+  return exec_task_list_->run([this, action, logical_input, logical_output,
+                               process = std::move(process)]() -> bool {
+    const auto& staged_fs = config_.StagedFs;
+
+    auto input_physical = staged_fs->resolve_input(logical_input);
+    if (!input_physical.has_value()) {
+      return false;
+    }
+    auto output_physical = staged_fs->resolve_output(logical_output);
+    if (!output_physical.has_value()) {
+      return false;
+    }
+
+    std::vector<std::filesystem::path> input_paths;
+    input_paths.push_back(*input_physical);
+    if (skip_rebuild(config_, std::move(input_paths), *output_physical, log_)) {
+      return true;
+    }
+
+    auto rsl = staged_fs->read_input(logical_input);
+    if (!rsl.has_value()) {
+      // read_input logs the failure on error
+      return false;
+    }
+    if (rsl->empty()) {
+      log_->error("Input file {} is empty", logical_input);
+      return false;
+    }
+
+    auto process_result = process();
+    if (std::holds_alternative<LoadAssimpFileAltResult>(process_result)) {
+      switch (std::get<LoadAssimpFileAltResult>(process_result)) {
+        case LoadAssimpFileAltResult::UseCached:
           return true;
-        }
-
-        auto rsl = filesystem_->read_bin(input_file_path);
-        if (!rsl.has_value()) {
-          // read_bin logs the failure on error
+        default:
           return false;
-        }
-        if (rsl->empty()) {
-          log_->error("Input file {} is empty", input_file_path.string());
-          return false;
-        }
+      }
+    }
 
-        auto process_result = process();
-        if (std::holds_alternative<LoadAssimpFileAltResult>(process_result)) {
-          switch (std::get<LoadAssimpFileAltResult>(process_result)) {
-            case LoadAssimpFileAltResult::UseCached:
-              return true;
-            default:
-              return false;
-          }
-        }
+    std::shared_ptr<flatbuffers::FlatBufferBuilder> draco_igasset_bin =
+        std::get<std::shared_ptr<flatbuffers::FlatBufferBuilder>>(
+            std::move(process_result));
 
-        std::shared_ptr<flatbuffers::FlatBufferBuilder> draco_igasset_bin =
-            std::get<std::shared_ptr<flatbuffers::FlatBufferBuilder>>(
-                std::move(process_result));
-
-        return filesystem_->write_bin(
-            config_.IgassetPathRoot / action->output_file_path()->str(),
-            *draco_igasset_bin);
-      });
+    return staged_fs->write_output(logical_output, *draco_igasset_bin);
+  });
 }
 
 }  // namespace igassetgen

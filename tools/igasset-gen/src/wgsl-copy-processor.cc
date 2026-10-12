@@ -8,6 +8,7 @@
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
+#include <staged-asset-io/staged-filesystem.h>
 
 #include <filesystem>
 #include <fstream>
@@ -24,25 +25,36 @@ namespace igassetgen {
 std::shared_ptr<igasync::Promise<bool>>
 WgslCopyProcessor::generate_wgsl_igasset(
     const IgAssetGen::CopyWgslSourceAction* action) const {
-  auto input_file_path =
-      config_.InputAssetPathRoot / action->input_file_path()->str();
+  const std::string logical_input = action->input_file_path()->str();
+  const std::string logical_output = action->output_file_path()->str();
 
-  log_->info("Copying WGSL file {} to IgAsset {}", input_file_path.string(),
-             action->output_file_path()->str());
+  log_->info("Copying WGSL file {} to IgAsset {}", logical_input,
+             logical_output);
 
-  return exec_task_list_->run([filesystem = filesystem_, config = config_,
-                               log = log_, input_file_path, action]() -> bool {
+  return exec_task_list_->run([config = config_, log = log_, logical_input,
+                               logical_output, action]() -> bool {
+    const auto& staged_fs = config.StagedFs;
+
+    auto input_physical = staged_fs->resolve_input(logical_input);
+    if (!input_physical.has_value()) {
+      // resolve_input logs the denial on error
+      return false;
+    }
+    auto output_physical = staged_fs->resolve_output(logical_output);
+    if (!output_physical.has_value()) {
+      // resolve_output logs the denial on error
+      return false;
+    }
+
     std::vector<std::filesystem::path> input_paths;
-    input_paths.push_back(input_file_path);
-    auto output_file_path =
-        config.IgassetPathRoot / action->output_file_path()->str();
-    if (skip_rebuild(config, std::move(input_paths), output_file_path, log)) {
+    input_paths.push_back(*input_physical);
+    if (skip_rebuild(config, std::move(input_paths), *output_physical, log)) {
       return true;
     }
 
-    auto rsl = filesystem->read_bin(input_file_path);
+    auto rsl = staged_fs->read_input(logical_input);
     if (!rsl.has_value()) {
-      // read_bin logs the failure on error
+      // read_input logs the failure on error
       return false;
     }
     if (rsl->empty()) {
@@ -72,7 +84,7 @@ WgslCopyProcessor::generate_wgsl_igasset(
 
     fbb->Finish(igasset);
 
-    return filesystem->write_bin(output_file_path, *fbb);
+    return staged_fs->write_output(logical_output, *fbb);
   });
 }
 

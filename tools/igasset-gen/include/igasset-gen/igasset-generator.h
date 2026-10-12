@@ -9,7 +9,6 @@
 #include <igasync/promise.h>
 #include <igasync/task_list.h>
 #include <spdlog/logger.h>
-#include <tool-utils/filesystem.h>
 
 #include <memory>
 #include <optional>
@@ -20,12 +19,10 @@ class IgassetGenerator {
  public:
   IgassetGenerator(std::shared_ptr<spdlog::logger> log,
                    PlanInvocationConfig config,
-                   std::shared_ptr<igasync::TaskList> exec_task_list,
-                   std::shared_ptr<toolutils::Filesystem> filesystem)
+                   std::shared_ptr<igasync::TaskList> exec_task_list)
       : log_(log->clone("IgassetGenerator")),
         config_(config),
         exec_task_list_(exec_task_list),
-        filesystem_(filesystem),
         wgsl_copy_processor_(std::nullopt),
         assimp_geo_processor_(std::nullopt) {}
   IgassetGenerator(const IgassetGenerator&) = delete;
@@ -44,7 +41,6 @@ class IgassetGenerator {
   BasisuProcessor& basisu_processor() const;
 
  private:
-  std::shared_ptr<toolutils::Filesystem> filesystem_;
   std::shared_ptr<spdlog::logger> log_;
   PlanInvocationConfig config_;
   std::shared_ptr<igasync::TaskList> exec_task_list_;
